@@ -11,9 +11,11 @@
 
 ## 1: make
 make.musse <- function(tree, states, k, sampling.f=NULL, strict=TRUE,
-                       safe=FALSE) {
+                       control=list()) {
+  control <- modifyList(list(safe=FALSE, tol=1e-8, eps=0), control)  
   cache <- make.cache.musse(tree, states, k, sampling.f, strict)
-  branches <- make.branches.musse(k, safe)
+  branches <- make.branches.musse(k, control$safe, control$tol,
+                                  control$eps)
 
   ll.musse <- function(pars, condition.surv=TRUE, root=ROOT.OBS,
                        root.p=NULL, intermediates=FALSE) {
@@ -80,12 +82,9 @@ mcmc.musse <- mcmc.lowerzero
 make.cache.musse <- function(tree, states, k, sampling.f=NULL,
                              strict=TRUE) {
   tree <- check.tree(tree)
-  tmp <- states <- check.states(tree, states,
-                                strict=strict, strict.vals=1:k)
-  states <- as.integer(states)
-
-  if ( !isTRUE(all.equal(states, tmp, check.attributes=FALSE)) )
-    stop("'states' must be an integer vector (or convert nicely to one)")
+  states <- check.states(tree, states,
+                         strict=strict, strict.vals=1:k)
+  states <- check.integer(states)
 
   sampling.f <- check.sampling.f(sampling.f, k)
 
@@ -103,12 +102,19 @@ initial.tip.musse <- function(cache) {
   y <- matrix(rep(c(1-f, rep(0, k)), k + 1), k+1, 2*k, TRUE)
   y[k+1,(k+1):(2*k)] <- diag(y[1:k,(k+1):(2*k)]) <- f
   y <- matrix.to.list(y)
-  
+
   y.i <- cache$tip.state
   y.i[is.na(y.i)] <- k + 1
 
-  tips <- cache$tips
+  if ( !is.null(multistate <- attr(cache$tip.state, "multistate")) ) {
+    y.multi <- unique(multistate$states)
+    y.i.multi <- match(multistate$states, y.multi)
 
+    y <- c(y, lapply(y.multi, function(x) c(1-f, x)))
+    y.i[multistate$i] <- y.i.multi + k + 1
+  }
+
+  tips <- cache$tips
   dt.tips.grouped(y, y.i, tips, cache$len[tips])
 }
 
@@ -125,8 +131,8 @@ initial.conditions.musse <- function(init, pars, t, is.root=FALSE) {
 }
 
 ## 8: branches (separate for mk2 and mkn)
-make.branches.musse <- function(k, safe=FALSE) {
-  RTOL <- ATOL <- 1e-8
+make.branches.musse <- function(k, safe=FALSE, tol=1e-8, eps=0) {
+  RTOL <- ATOL <- tol
 
   qmat <- matrix(0, k, k)
   idx.qmat <- cbind(rep(1:k, each=k-1),
@@ -145,7 +151,7 @@ make.branches.musse <- function(k, safe=FALSE) {
     pars <- c(pars[idx.lm], qmat)
     t(musse.ode(y, c(t0, t0+len), pars, rtol=RTOL, atol=ATOL)[-1,-1])
   }
-  make.branches(branches.musse, (k+1):(2*k))
+  make.branches(branches.musse, (k+1):(2*k), eps)
 }
 
 ## Historical interest: This function creates a function for computing
