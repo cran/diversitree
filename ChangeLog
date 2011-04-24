@@ -1,3 +1,75 @@
+2011-04-20  Rich FitzJohn  <fitzjohn@zoology.ubc.ca>
+
+	* NAMESPACE: new ROOT.MAX constant for maximising the root
+	state probability
+
+	* R/check.R: Simple support for multistate/polymorphic tip
+	states.  Slightly improved "almost-integer" checking.
+
+	* R/mle.R: Additional arguments not being passed through to
+	hessian calculations.
+
+	* R/model-bisse-split.R: Work around corner case.
+
+	* R/model-bm.R: Check on parameter length.  Don't require an
+	ultrametric tree.  Measurement error handling was slightly off.
+
+	* R/model-musse.R: Simple support for multistate/polymorphic tip
+	states.
+
+	* man/constants.Rd: Added ROOT.MAX
+
+	* man/make.quasse.Rd: Update correct likelihood numbers.  Disable
+	fftR run, as it is far too slow.
+
+2011-03-17  Rich FitzJohn  <fitzjohn@zoology.ubc.ca>
+
+	* data/geosse.R: Remove save=TRUE argument from require()
+	(defunct in R 2.13).
+
+2011-03-14  Rich FitzJohn  <fitzjohn@zoology.ubc.ca>
+
+	* DESCRIPTION: Version bump to 0.6-4
+
+2011-03-11  Rich FitzJohn  <fitzjohn@zoology.ubc.ca>
+
+	* NAMESPACE: Added start of mkn-with-derivatives.
+
+	* R/check.R: Check for negative branch lengths in trees.
+
+	* R/diversitree-branches.R: Better treatment of root when one
+	lambda value is zero (*Will change calculations*)
+
+	* R/model-{bd-ode,bd-t,bisse-split,bisse-t,bisse-td,bisse,
+	geosse,musse-split,musse,musse-t,musse-td,musse}.R (and associated
+	documentation): Replaced safe=FALSE argument with control list
+	that also allows controlling precision of integration and quality
+	of results.
+
+	* R/mcmc-hmc.R: Hamiltonian (Hybrid) Monte Carlo sampler.  Not yet
+	wired up to work with mcmc().
+
+	* R/model-linear-deriv.R, man/make.mkn.deriv.Rd,
+	src/linear-deriv.{c,h}: Preliminary code for mkn-with-derivatives
+
+	* src/util-complex.{c,h}, src/util-linalg.c,
+	src/util-matrix.{c,h}: Utilities for mkn-with-derivatives.
+
+2011-02-18  Rich FitzJohn  <fitzjohn@zoology.ubc.ca>
+
+	* R/mcmc.R: Removed check.par() from mcmc().  Changed order of
+	arguments for mcmc.lowerzero() to avoid an odd argument matching
+	bug.
+
+	* R/mle-mixed.R: Extra effort for QuaSSE models.
+
+	* R/model-quasse-split.R: Standardise attribute names
+
+	* R/util.R: Added count.eval(), added interval=0 support to
+	big.brother()
+
+	* man/asr-bisse.Rd, man/asr-mkn.Rd: Fixed examples
+
 2011-01-26  Rich FitzJohn  <fitzjohn@zoology.ubc.ca>
 
 	* DESCRIPTION: Bumped to 0.6-3

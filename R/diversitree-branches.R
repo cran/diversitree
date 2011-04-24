@@ -114,9 +114,9 @@ all.branches <- function(pars, cache, initial.conditions, branches) {
       }
     }
   } else {
-    tip.y <- branch.init[cache$tips] <- y$y
     tip.t <- y$t
     tip.target <- y$target
+    tip.y <- branch.init[tip.target] <- y$y
     for ( i in seq_along(tip.y) ) {
       ## TODO: This (the zero) assumes that all branches terminate at
       ## the present (not true for Mk2 style models, or extinct
@@ -224,6 +224,7 @@ ROOT.EQUI  <- 2
 ROOT.OBS   <- 3
 ROOT.GIVEN <- 4
 ROOT.BOTH  <- 5
+ROOT.MAX   <- 6
 ROOT.ALL   <- ROOT.BOTH
 
 root.p.xxsse <- function(vals, pars, root, root.p=NULL) {
@@ -260,8 +261,9 @@ root.xxsse <- function(vals, pars, lq, condition.surv, root.p) {
   d.root <- vals[-i]
   
   if ( condition.surv )
-    d.root <- d.root / (lambda * (1-e.root)^2)
-
+    ##  d.root <- d.root / (lambda * (1-e.root)^2) # old
+    d.root <- d.root / sum(root.p * lambda * (1 - e.root)^2)
+  
   if ( is.null(root.p) ) # ROOT.BOTH
     loglik <- log(d.root) + logcomp
   else
