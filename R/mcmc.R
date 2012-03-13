@@ -5,12 +5,6 @@
 ## take the input x and return a vector of parameters 'y'
 ## corresponding to a new position.
 
-## TODO: I want to allow arbitrary proposal methods.  Importantly, one
-## useful feature will be to allow some integer positions to be
-## updated with a slice sampler, and the others from a discrete
-## distribution.  Hopefully this can be done via the 'proposal'
-## vector.
-
 ## The default MCMC method will return a half-finished MCMC sample if
 ## interrupted with Ctrl-C.  It is expected that the default method
 ## will be sufficiently general to be useful for most approaches.
@@ -25,7 +19,11 @@ mcmc <- function(lik, x.init, nsteps, ...) {
 mcmc.default <- function(lik, x.init, nsteps, w, prior=NULL,
                          sampler=sampler.slice, fail.value=-Inf,
                          lower=-Inf, upper=Inf, print.every=1,
-                         control=list(), ...) {
+                         control=list(),
+                         save.every=0, save.file, ...) {
+  if ( save.every > 0 && missing(save.file) )
+    stop("save.file must be given if save.every > 0")
+    
   npar <- length(x.init)
   if ( is.null(names(x.init)) )
     try(names(x.init) <- argnames(lik), silent=TRUE)
@@ -34,17 +32,18 @@ mcmc.default <- function(lik, x.init, nsteps, w, prior=NULL,
     posterior <- protect(function(x) lik(x, ...),
                          fail.value.default=fail.value)
   else
-    posterior <- protect(function(x) lik(x, ...) + prior(x, ...),
+    posterior <- protect(function(x) lik(x, ...) + prior(x),
                          fail.value.default=fail.value)
 
   y.init <- posterior(x.init, fail.value=NULL)
 
-  if ( !is.finite(y.init) || y.init == fail.value )
+  if ( !is.finite(y.init) ||
+      (!is.null(fail.value) && y.init == fail.value) )
     stop("Starting point must have finite probability")
 
   lower <- check.par.length(lower, npar)
   upper <- check.par.length(upper, npar)
-  w     <- check.par.length(w,     npar) # TODO: may need revisiting.
+  w     <- check.par.length(w,     npar)
 
   check.bounds(lower, upper, x.init)
 
@@ -52,6 +51,13 @@ mcmc.default <- function(lik, x.init, nsteps, w, prior=NULL,
 
   if ( is.null(sampler) )
     sampler <- sampler.slice
+
+  clean.hist <- function(hist) {
+    out <- cbind(i=seq_along(hist),
+                  as.data.frame(t(sapply(hist, unlist))))
+    names(out)[ncol(out)] <- "p"
+    out
+  }
 
   mcmc.loop <- function() {
     for ( i in seq_len(nsteps) ) {
@@ -63,6 +69,13 @@ mcmc.default <- function(lik, x.init, nsteps, w, prior=NULL,
         cat(sprintf("%d: {%s} -> %2.5f\n", i,
                     paste(sprintf("%2.4f", tmp[[1]]), collapse=", "),
                     tmp[[2]]))
+      if ( save.every > 0 && i %% save.every == 0 ) {
+        ok <- try(write.csv(clean.hist(hist[seq_len(i)]),
+                            save.file, row.names=FALSE))
+        if ( inherits(ok, "try-error") )
+          warning("Error while writing progress file (continuing)",
+                  immediate.=TRUE)
+      }
     }
     hist
   }
@@ -78,11 +91,8 @@ mcmc.default <- function(lik, x.init, nsteps, w, prior=NULL,
   }
 
   hist <- tryCatch(mcmc.loop(), interrupt=mcmc.recover)
-  hist <- cbind(i=seq_along(hist),
-                as.data.frame(t(sapply(hist, unlist))))
-  names(hist)[ncol(hist)] <- "p"
 
-  hist
+  clean.hist(hist)
 }
 
 ## This is common, so this helps reduce code duplication.

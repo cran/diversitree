@@ -15,7 +15,6 @@ make.pde.quasse.fftR <- function(nx, dx, dt.max, nd) {
     padding <- pars$padding
     ndat <- length(pars$lambda)
     
-    ## TODO: add basic error checking here
     nt <- as.integer(ceiling(len / dt.max))
     dt <- len / nt
     if ( !(length(y) %in% (nd * nx)) )
@@ -29,9 +28,14 @@ make.pde.quasse.fftR <- function(nx, dx, dt.max, nd) {
     if ( !is.matrix(y) )
       y <- matrix(y, nx, nd)
 
-    quasse.integrate.fftR(y, pars$lambda, pars$mu, pars$drift,
-                          pars$diffusion, nt, dt, nx, ndat, dx,
-                          padding[1], padding[2])
+    ans <- quasse.integrate.fftR(y, pars$lambda, pars$mu, pars$drift,
+                                 pars$diffusion, nt, dt, nx, ndat, dx,
+                                 padding[1], padding[2])
+    ## Do the log compensation here, to make the careful calcuations
+    ## easier later.
+    q <- sum(ans[,2]) * dx
+    ans[,2] <- ans[,2] / q
+    list(log(q), ans)
   }
 }
 
@@ -82,8 +86,6 @@ fftR.propagate.x <- function(vars, drift, diffusion, dt, nx, dx, fy,
   ndat <- nx - (nkl + 1 + nkr)
   i.prev.l <- 1:nkl
   i.prev.r <- (ndat-nkr+1):ndat
-  ## TODO: I think that this might be wrong and zeroing too much?
-  ## That would be fairly harmless though.
   i.zero <- (ndat+1):nx
   vars.out[c(i.prev.l, i.prev.r),] <- vars[c(i.prev.l, i.prev.r),]
   vars.out[i.zero,] <- 0

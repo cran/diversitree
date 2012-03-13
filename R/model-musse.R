@@ -22,38 +22,25 @@ make.musse <- function(tree, states, k, sampling.f=NULL, strict=TRUE,
   else
     branches <- make.branches.musse(cache, control)
 
-  qmat <- matrix(0, k, k)
-  idx.qmat <- cbind(rep(1:k, each=k-1),
-               unlist(lapply(1:k, function(i) (1:k)[-i])))
-  idx.lm <- 1:(2*k)
-  idx.q <- (2*k+1):(k*(1+k))
+  f.pars <- make.musse.pars(k)
   
   ll.musse <- function(pars, condition.surv=TRUE, root=ROOT.OBS,
                        root.p=NULL, intermediates=FALSE) {
-    if ( length(pars) != k*(k+1) )
-      stop(sprintf("Invalid length parameters (expected %d)",
-                   k*(k+1)))
-    if ( any(!is.finite(pars)) || any(pars < 0) )
-      return(-Inf)
+    check.pars.musse(pars, k)
     if ( !is.null(root.p) &&  root != ROOT.GIVEN )
       warning("Ignoring specified root state")
 
-    qmat[idx.qmat] <- pars[idx.q]
-    diag(qmat) <- -rowSums(qmat)
-    pars2 <- c(pars[idx.lm], qmat)
-
     if ( backend == "CVODES" )
-      ll.xxsse.C(pars2, all.branches,
+      ll.xxsse.C(f.pars(pars), all.branches,
                  condition.surv, root, root.p, intermediates)
     else
-      ll.xxsse(pars2, cache, initial.conditions.musse, branches,
+      ll.xxsse(f.pars(pars), cache, initial.conditions.musse, branches,
                condition.surv, root, root.p, intermediates)
   }
 
-  ll <- function(pars, ...) ll.musse(pars, ...)
-  class(ll) <- c("musse", "function")
-  attr(ll, "k") <- k
-  ll
+  class(ll.musse) <- c("musse", "function")
+  attr(ll.musse, "k") <- k
+  ll.musse
 }
 
 ## 2: print
@@ -108,8 +95,9 @@ make.cache.musse <- function(tree, states, k, sampling.f=NULL,
   sampling.f <- check.sampling.f(sampling.f, k)
 
   cache <- make.cache(tree)
-  cache$tip.state <- states
+  cache$ny <- 2*k
   cache$k <- k
+  cache$tip.state <- states
   cache$sampling.f <- sampling.f
   cache$y <- initial.tip.musse(cache)
   cache
@@ -140,13 +128,13 @@ initial.tip.musse <- function(cache) {
 ## 6: ll.musse is done within make.musse
 
 ## 7: initial.conditions:
-initial.conditions.musse <- function(init, pars, t, is.root=FALSE) {
-  k <- length(init[[1]])/2
+initial.conditions.musse <- function(init, pars, t, idx) {
+  k <- nrow(init)/2
   i <- seq_len(k)
   j <- i + k
 
-  c(init[[1]][i],
-    init[[1]][j] * init[[2]][j] * pars[i])
+  c(init[i,1],
+    init[j,1] * init[j,2] * pars[i])
 }
 
 ## 8: branches
@@ -171,30 +159,20 @@ make.all.branches.C.musse <- function(cache, control) {
                       neq, np, comp.idx, control)
 }
 
-## Historical interest: This function creates a function for computing
-## derivatives under MuSSE.  However, it uses the wrong argument setup
-## right now, so I've commented it out.  It probably should not have
-## been used.
-## make.musse.eqs.R <- function(k) {
-##   qmat <- matrix(0, k, k)
-##   idx.qmat <- cbind(rep(1:k, each=k-1),
-##                unlist(lapply(1:k, function(i) (1:k)[-i])))
-##   idx.e <- 1:k
-##   idx.d <- (k+1):(2*k)
-##   idx.l <- 1:k
-##   idx.m <- (k+1):(2*k)
-##   idx.q <- (2*k+1):(k*(1+k))
-##   function(t, y, parms, ...) {
-##     e <- y[idx.e]
-##     d <- y[idx.d]
-##     lambda <- parms[idx.l]
-##     mu     <- parms[idx.m]
-##     qmat[idx.qmat] <- parms[idx.q]  
-##     diag(qmat) <- -rowSums(qmat)
-##     list(c(mu - (lambda + mu) * e + lambda * e * e + qmat %*% e,
-##            -(lambda + mu) * d + 2 * lambda * d * e + qmat %*% d))
-##   }
-## }
+## Additional functions:
+make.musse.pars <- function(k) {
+  qmat <- matrix(0, k, k)
+  idx.qmat <- cbind(rep(1:k, each=k-1),
+               unlist(lapply(1:k, function(i) (1:k)[-i])))
+  idx.lm <- 1:(2*k)
+  idx.q <- (2*k+1):(k*(1+k))
+
+  function(pars) {
+    qmat[idx.qmat] <- pars[idx.q]
+    diag(qmat) <- -rowSums(qmat)
+    c(pars[idx.lm], qmat)
+  }
+}
 
 ## This makes the Q matrix from a set of parameters.
 musse.Q <- function(pars, k) {
@@ -211,6 +189,7 @@ musse.Q <- function(pars, k) {
   qmat
 }
 
+## Heuristic starting point
 starting.point.musse <- function(tree, k, q.div=5, yule=FALSE) {
   pars.bd <- suppressWarnings(starting.point.bd(tree, yule))
   r <- if  ( pars.bd[1] > pars.bd[2] )

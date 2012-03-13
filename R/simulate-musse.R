@@ -89,6 +89,8 @@ make.tree.musse <- function(pars, max.taxa=Inf, max.t=Inf, x0,
                      split=split)
 
   hist <- as.data.frame(do.call(rbind, hist))
+  if ( nrow(hist) == 0 )
+    hist <- as.data.frame(matrix(NA, 0, 4))
   names(hist) <- c("idx", "t", "from", "to")
   hist$x0 <- info$start[match(hist$idx, info$idx)]
   hist$tc <- hist$t - hist$x0
@@ -116,4 +118,31 @@ tree.musse <- function(pars, max.taxa=Inf, max.t=Inf,
     phy
   else
     prune(phy)
+}
+
+tree.musse.multitrait <- function(pars, n.trait, depth, max.taxa=Inf,
+                                  max.t=Inf, include.extinct=FALSE,
+                                  x0=NA) {
+  tr <- musse.multitrait.translate(n.trait, depth)
+  np <- ncol(tr)
+  if ( !(all(is.finite(x0)) && length(x0) == n.trait) )
+    stop(sprintf("x0 must be a vector of length %d"), n.trait)
+  if ( !all(x0 %in% c(0, 1)) )
+    stop("All x0 must be in [0,1]")
+  if ( length(pars) != ncol(tr) )
+    stop(sprintf("Expected %d parameters:\n\t%s",
+                 ncol(tr), paste(colnames(tr), collapse=", ")))
+  pars2 <- drop(tr %*% pars)
+
+  code <- paste(x0, collapse="")
+  types <- do.call(expand.grid, rep(list(0:1), n.trait))
+  key <- apply(types, 1, paste, collapse="")
+  x02 <- match(code, key)
+
+  tree <- tree.musse(pars2, max.taxa, max.t, include.extinct, x02)
+  
+  tree$tip.state <- types[tree$tip.state,,drop=FALSE]
+  rownames(tree$tip.state) <- tree$tip.label
+  colnames(tree$tip.state) <- LETTERS[seq_len(n.trait)]
+  tree
 }

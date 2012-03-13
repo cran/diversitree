@@ -1,5 +1,6 @@
 #include <R.h>
 
+#include "config.h"
 #ifdef WITH_CVODES
 
 /* Sundials Header Files */
@@ -44,7 +45,7 @@ RCvodesObj* make_cvodes(int neq, int np, CVRhsFn rhs, double rtol,
      in cvode_mem.     
    */
   /* For stiff problems, this is recommended */
-  /*   cvode_mem = CVodeCreate(CV_BDF, CV_NEWTON); */
+  /* cvode_mem = CVodeCreate(CV_BDF, CV_NEWTON);*/
   /* But I am assuming nonstiff and going with */
   cvode_mem = CVodeCreate(CV_ADAMS, CV_FUNCTIONAL);
   if (cvodes_check_flag((void *)cvode_mem, "CVodeCreate", 0)) 
@@ -149,7 +150,7 @@ void cvodes_set_pars(RCvodesObj* obj, double *pars) {
 
 int cvodes_run(RCvodesObj *obj, double *y0, double *times, int nt, 
 	       double *ret) {
-  int i, j, flag;
+  int i, flag;
   int neq = obj->neq;
   realtype t, tout;
   void *cvode_mem = obj->cvode_mem;
@@ -158,7 +159,7 @@ int cvodes_run(RCvodesObj *obj, double *y0, double *times, int nt,
 
   /* Initialise y */
   for( i = 0; i < neq; i++ )
-    ret[nt*i] = ydat[i] = y0[i];
+    ret[i] = ydat[i] = y0[i];
 
   CVodeReInit(cvode_mem, times[0], y);
 
@@ -170,8 +171,7 @@ int cvodes_run(RCvodesObj *obj, double *y0, double *times, int nt,
     if ( flag != CV_TOO_CLOSE && cvodes_check_flag(&flag, "CVode", 1) )
       return -1;
 
-    for ( j = 0; j < neq; j++ )
-      ret[i + nt*j] = ydat[j];
+    memcpy(ret + i*neq, ydat, neq * sizeof(double));
   }
   return 0;
 }
@@ -181,7 +181,7 @@ int cvodes_check_flag(void *flagvalue, char *funcname, int opt) {
 
   /* Check if SUNDIALS function returned NULL pointer - no memory allocated */
   if (opt == 0 && flagvalue == NULL) {
-    fprintf(stderr, "\nSUNDIALS_ERROR: %s() failed - returned NULL pointer\n\n",
+    Rprintf("\nSUNDIALS_ERROR: %s() failed - returned NULL pointer\n\n",
 	    funcname);
     return(1); }
 
@@ -189,13 +189,13 @@ int cvodes_check_flag(void *flagvalue, char *funcname, int opt) {
   else if (opt == 1) {
     errflag = (int *) flagvalue;
     if (*errflag < 0) {
-      fprintf(stderr, "\nSUNDIALS_ERROR: %s() failed with flag = %d\n\n",
+      Rprintf("\nSUNDIALS_ERROR: %s() failed with flag = %d\n\n",
 	      funcname, *errflag);
       return(1); }}
 
   /* Check if function returned NULL pointer - no memory allocated */
   else if (opt == 2 && flagvalue == NULL) {
-    fprintf(stderr, "\nMEMORY_ERROR: %s() failed - returned NULL pointer\n\n",
+    Rprintf("\nMEMORY_ERROR: %s() failed - returned NULL pointer\n\n",
 	    funcname);
     return(1); }
 

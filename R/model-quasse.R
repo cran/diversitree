@@ -1,20 +1,21 @@
 
 ## 1: make
 make.quasse <- function(tree, states, states.sd, lambda, mu,
-                        control=NULL, sampling.f=NULL) {
+                        control=NULL, sampling.f=NULL,
+                        defaults=NULL) {
   cache <- make.cache.quasse(tree, states, states.sd, lambda, mu,
                              control, sampling.f)
 
-  ## TODO: branches here changes to allow backend switching, basd on
-  ## cache$control$method...
   control <- cache$control
   tips <- NULL
   
   if ( control$method == "fftC" ) {
     branches <- make.branches.quasse.fftC(control)
-    if ( control$tips.combined )
+    if ( control$tips.combined ) {
+      stop("Not currently supported.")
       tips <- make.tips.quasse.fftC(control, cache$len[cache$tips],
                                    cache$tips)
+    }
   } else if ( control$method == "fftR" ) {
     branches <- make.branches.quasse.fftR(control)
   } else if ( control$method == "mol" ) {
@@ -23,8 +24,61 @@ make.quasse <- function(tree, states, states.sd, lambda, mu,
 
   initial.conditions <- make.initial.conditions.quasse(control)
 
-  ll <- function(pars, ...)
-    ll.quasse(cache, pars, branches, initial.conditions, tips, ...)
+  ll <- function(pars, condition.surv=TRUE, root=ROOT.OBS,
+                 root.f=NULL, intermediates=FALSE) {
+    names(pars) <- NULL # Because of use of do.call, strip names
+    args <- cache$args
+
+    drift <- pars[args$drift]
+    diffusion <- pars[args$diffusion]
+
+    ext <- quasse.extent(cache$control, drift, diffusion)
+    ## This would confirm the translation:
+    ##   all.equal(ext$x[[1]][ext$tr], ext$x[[2]])
+
+    ## Parameters, expanded onto the extent:
+    pars <- expand.pars.quasse(cache$lambda, cache$mu, args, ext, pars)
+
+    lambda.x <- c(pars$hi$lambda, pars$lo$lambda)
+    mu.x <- c(pars$hi$mu, pars$lo$mu)
+
+    if ( any(lambda.x < 0) || any(mu.x < 0) || diffusion <= 0 )
+      stop("Illegal negative parameters")
+    if ( !any(lambda.x > 0) )
+      stop("No positive lambda; cannot compute likelihood")
+
+    init <- initial.tip.quasse(cache, cache$control, ext$x[[1]])
+
+    if ( cache$control$tips.combined ) {
+      cache$preset <- tips(init$y, pars)
+
+      ## supress tip calculation now:
+      cache$tips <- integer(0) 
+      cache$y <- NULL
+    } else {
+      cache$y <- init
+    }
+
+    ans <- all.branches.list(pars, cache, initial.conditions, branches)
+    
+    vals <- matrix(ans$init[[cache$root]],
+                   cache$control$nx, 2)[seq_len(ext$ndat[2]),]
+
+    ## This assumes that the root node is in the low-condition, which is
+    ## enforced by the checking.
+    root.p <- root.p.quasse(vals, ext, root, root.f)
+    loglik <- root.quasse(vals, pars$lo$lambda, ans$lq, condition.surv,
+                          root.p, cache$control$dx)
+
+    if ( intermediates )
+      attr(loglik, "intermediates") <- ans
+
+    loglik
+  }
+
+  if ( !is.null(defaults) )
+    ll <- set.defaults(ll, defaults)
+
   attr(ll, "f.lambda") <- lambda
   attr(ll, "f.mu") <- mu
   class(ll) <- c("quasse", "function")
@@ -48,8 +102,6 @@ argnames.quasse <- function(x, ...) {
     "drift", "diffusion")
 }
 `argnames<-.quasse` <- function(x, value) {
-  ## It might be easier to get at cache?
-  ## TODO: fix this if the cache structure changes.
   if ( length(value) != environment(x)$cache$n.args )
     stop("Invalid names length")
   else
@@ -68,7 +120,7 @@ find.mle.quasse <- function(func, x.init, method, fail.value=NA,
 
 ## 5: make.cache:
 make.cache.quasse <- function(tree, states, states.sd, lambda, mu,
-                              control, sampling.f) {
+                              control, sampling.f, for.split=FALSE) {
   ## 1: tree
   tree <- check.tree(tree)  
 
@@ -80,29 +132,32 @@ make.cache.quasse <- function(tree, states, states.sd, lambda, mu,
   ## 3: Control structure (lots of checking!)
   control <- check.control.quasse(control, tree, states)
 
-  ## 4: Speciation/extinction functions
-  n.lambda <- check.f.quasse(lambda)
-  n.mu     <- check.f.quasse(mu)
-  n.args   <- n.lambda + n.mu + 2
-  args <- list(lambda=seq_len(n.lambda),
-               mu=seq_len(n.mu) + n.lambda,
-               drift=n.lambda + n.mu + 1,
-               diffusion=n.lambda + n.mu + 2)
-
-  sampling.f <- check.sampling.f(sampling.f, 1)
-
-  ## The raw cache just provides the traversal information:
   cache <- make.cache(tree)
   cache$states  <- states
   cache$states.sd <- states.sd
-  cache$sampling.f <- sampling.f
-  cache$lambda <- lambda
-  cache$mu <- mu
-
   cache$control <- control
-  
-  cache$args <- args
-  cache$n.args <- n.args
+  ## Declare that the variables will be returned in a list, not in
+  ## matrix form...
+  cache$vars.in.list <- TRUE
+
+  if ( !for.split ) {
+    ## 4: Speciation/extinction functions
+    n.lambda <- check.f.quasse(lambda)
+    n.mu     <- check.f.quasse(mu)
+    n.args   <- n.lambda + n.mu + 2
+    args <- list(lambda=seq_len(n.lambda),
+                 mu=seq_len(n.mu) + n.lambda,
+                 drift=n.lambda + n.mu + 1,
+                 diffusion=n.lambda + n.mu + 2)
+
+    cache$lambda <- lambda
+    cache$mu <- mu
+    cache$args <- args
+    cache$n.args <- n.args
+
+    sampling.f <- check.sampling.f(sampling.f, 1)
+    cache$sampling.f <- sampling.f
+  }
 
   cache
 }
@@ -129,64 +184,14 @@ initial.tip.quasse <- function(cache, control, x) {
     list(target=target, y=y, t=t[i])
   } else {
     y <- mapply(function(mean, sd)
-                c(rep(e0, nx), dnorm(x, mean, sd), rep(0, npad)),
+                c(rep(e0, nx),
+                  dnorm(x, mean, sd), rep(0, npad)),
                 cache$states, cache$states.sd, SIMPLIFY=FALSE)
     dt.tips.ordered(y, cache$tips, cache$len[cache$tips])
   }
 }
 
 ## 6: ll
-ll.quasse <- function(cache, pars, branches, initial.conditions, tips,
-                      condition.surv=TRUE, root=ROOT.OBS,
-                      root.p=NULL, intermediates=FALSE) {
-  names(pars) <- NULL # Because of use of do.call, strip names
-  args <- cache$args
-
-  drift <- pars[args$drift]
-  diffusion <- pars[args$diffusion]
-
-  ext <- quasse.extent(cache$control, drift, diffusion)
-  ## This would confirm the translation:
-  ##   all.equal(ext$x[[1]][ext$tr], ext$x[[2]])
-
-  ## Parameters, expanded onto the extent:
-  pars <- expand.pars.quasse(cache$lambda, cache$mu, args, ext, pars)
-
-  lambda.x <- c(pars$hi$lambda, pars$lo$lambda)
-  mu.x <- c(pars$hi$mu, pars$lo$mu)
-
-  if ( any(lambda.x < 0) || any(mu.x < 0) || diffusion <= 0 )
-    stop("Illegal negative parameters")
-  if ( !any(lambda.x > 0) )
-    stop("No positive lambda; cannot compute likelihood")
-
-  init <- initial.tip.quasse(cache, cache$control, ext$x[[1]])
-
-  if ( cache$control$tips.combined ) {
-    cache$preset <- tips(init$y, pars)
-
-    ## supress tip calculation now:
-    cache$tips <- integer(0) 
-    cache$y <- NULL
-  } else {
-    cache$y <- init
-  }
-
-  ans <- all.branches(pars, cache, initial.conditions, branches)
-  
-  vals <- matrix(ans$init[[cache$root]], cache$control$nx, 2)
-
-  ## TODO: this assumes that the root node is in the low-condition.  I
-  ## think that this is enforced by the checking, but I cannot
-  ## remember.
-  loglik <- root.quasse(vals[seq_len(ext$ndat[2]),], ans$lq,
-                        cache$control$dx, pars$lo$lambda,
-                        condition.surv)
-  if ( intermediates )
-    attr(loglik, "intermediates") <- ans
-
-  loglik
-}
 
 ## 7: initial.conditions
 make.initial.conditions.quasse <- function(control) {
@@ -203,7 +208,7 @@ make.initial.conditions.quasse <- function(control) {
   ## nodes that finish right at the critical interval might have
   ## conflicting lengths.
   eps <- 1e-8
-  function(init, pars, t, is.root=FALSE) {
+  function(init, pars, t, idx) {
     if ( length(init[[1]]) != length(init[[2]]) )
       stop("Data have incompatible length")
 
@@ -237,55 +242,113 @@ make.branches.quasse <- function(f.hi, f.lo, control) {
   dx <- control$dx
   tc <- control$tc
   r <- control$r
-  
-  function(y, len, pars, t0) {
-    if ( t0 >= tc ) {
-      ans <- f.lo(y, len, pars$lo, t0)
-    } else if ( t0 + len < tc ) {
-      ans <- f.hi(y, len, pars$hi, t0)
-      dx <- dx / r
+  eps <- log(control$eps)
+  dt.max <- control$dt.max
+
+  ## This is hacky version of the log compensation.  It also reduces
+  ## the stepsize when bisecting a branch.  It doesn't seem to change
+  ## much on 
+  careful <- function(f, y, len, pars, t0, dt.max) {
+    ans <- f(y, len, pars, t0)
+    if ( ans[[1]] > eps ) { # OK
+      ans
     } else {
-      len.hi <- tc - t0
-      ans.hi <- f.hi(y, len.hi, pars$hi, t0)
-      y.lo <- ans.hi[pars$tr,]
-      if ( nrow(y.lo) < nx )
-        y.lo <- rbind(y.lo, matrix(0, nx - length(pars$tr), 2))
-      ans <- f.lo(y.lo, len - len.hi, pars$lo, t0)
+      if ( control$method == "fftC" ||
+           control$method == "fftR" )
+        dt.max <- dt.max / 2 # Possibly needed
+      len2 <- len/2
+      ans1 <- Recall(f, y,         len2, pars, t0,        dt.max)
+      ans2 <- Recall(f, ans1[[2]], len2, pars, t0 + len2, dt.max)
+      ans2[[1]][[1]] <- ans1[[1]][[1]] + ans2[[1]][[1]]
+      ans2
+    }
+  }
+
+  ## Start by normalising the input so that eps up there make
+  ## sense...
+  function(y, len, pars, t0, idx) {
+    if ( t0 < tc ) {
+      dx0 <- dx / r
+      nx0 <- nx * r
+    } else {
+      dx0 <- dx
+      nx0 <- nx
     }
 
-    ## This should probably be togglable.
-    ans[,2][ans[,2] < 0] <- 0
+    ## Here, we also squash all negative numbers.
+    if ( any(y < -1e-8) )
+      stop("Actual negative D value detected -- calculation failure")
+    y[y < 0] <- 0
+    y <- matrix(y, nx0, 2)
+    q0 <- sum(y[,2]) * dx0
+    if ( q0 <= 0 )
+      stop("No positive D values")
+    y[,2] <- y[,2] / q0
+    lq0 <- log(q0)
+    
+    if ( t0 >= tc ) {
+      ans <- careful(f.lo, y, len, pars$lo, t0, dt.max)
+    } else if ( t0 + len < tc ) {
+      ans <- careful(f.hi, y, len, pars$hi, t0, dt.max)
+    } else {
+      len.hi <- tc - t0
+      ans.hi <- careful(f.hi, y, len.hi, pars$hi, t0, dt.max)
 
-    q <- sum(ans[,2]) * dx
-    ans[,2] <- ans[,2] / q
-    c(log(q), ans)
+      y.lo <- ans.hi[[2]][pars$tr,]
+      lq0 <- lq0 + ans.hi[[1]]
+      if ( nrow(y.lo) < nx )
+        y.lo <- rbind(y.lo, matrix(0, nx - length(pars$tr), 2))
+
+      ## Fininshing up with the low resolution branch...
+      ans <- careful(f.lo, y.lo, len - len.hi, pars$lo, tc, dt.max)
+    }
+
+    c(ans[[1]] + lq0, ans[[2]])
   }
 }
 
 
 ## TODO: A bunch more options to come in here for different root
-## styles, etc.  Then drop the 'old.style' bit (hence the inefficiency
-## there).
+## styles, etc.  See root.bbm in the BBM code for how to do this.
+##
 ## Still to do: ROOT.FLAT, ROOT.GIVEN (ROOT.GIVEN requires computing
 ## things against the x extent...)
+root.quasse <- function(vars, lambda, lq, condition.surv, root.p,
+                        dx) {
+  logcomp <- sum(lq)
 
-## Normally, the probability of speciation at the root and subsequent
-## survival is computed as
-##   lambda * (1 - E)^2
-## Here I will compute
-##   \int p(x) \lambda(x) (1 - E(x))^2 dx
-root.quasse <- function(vars, log.comp, dx, lambda, condition.surv) {
   e.root <- vars[,1]
   d.root <- vars[,2]
 
-  p.root <- d.root / (sum(d.root) * dx)
+  if ( condition.surv )
+    d.root <- d.root / sum(root.p * lambda * (1 - e.root)^2) * dx
 
-  if ( condition.surv ) {
-    ## d.root <- d.root / (lambda * (1-e.root)^2)
-    p.surv <- sum(p.root * lambda * (1 - e.root)^2) * dx
-    d.root <- d.root / p.surv
-  }
-
-  log(sum(p.root * d.root) * dx) + sum(log.comp)
+  log(sum(root.p * d.root) * dx) + logcomp
 }
 
+## ROOT.FLAT
+## ROOT.EQUI: not possible
+## ROOT.OBS
+## ROOT.GIVEN
+## ROOT.BOTH: not too useful (also ROOT.ALL)
+## ROOT.MAX:  not done
+
+root.p.quasse <- function(vals, ext, root, root.f) {
+  x <- ext$x[[2]]
+  dx <- x[2] - x[1]
+  nx <- ext$nx[2]
+
+  d.root <- vals[,2]
+  
+  if ( root == ROOT.FLAT ) {
+    p <- 1 / ((nx-1) * dx)
+  } else if ( root == ROOT.OBS )  {
+    p <- d.root / (sum(d.root) * dx)
+  } else if ( root == ROOT.GIVEN ) {
+    p <- root.f(x)
+  } else {
+    stop("Unsupported root option")
+  }
+
+  p
+}

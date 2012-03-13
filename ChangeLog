@@ -1,3 +1,342 @@
+2012-03-13  Rich FitzJohn  <fitzjohn@zoology.ubc.ca>
+
+	* R/model-bd*.R: Combined ode and Nee BD calculations.
+
+	* DESCRIPTION: Bump to 0.9-1, add mention of Classe and BiSSE-ness
+
+	* NAMESPACE: More imports
+
+	* R/check.R: check.control.continuous, for checking vcv/direct
+	switch for BM methods.
+
+	* R/diversitree-branches.R: whitespace?
+
+	* R/model-bisseness-unresolved.R: Added unresolved clade support
+	for BiSSE-ness (from Sally Otto)
+
+	* R/model-bisseness.R: Changes to allow unresolved clades, and
+	other minor tweaks.
+
+	* R/model-bm.R: switch to 'control' based method switching.
+
+	* R/model-classe.R: Added
+
+	* R/model-geosse-split.R: Updated to work with new split
+	functions.
+
+	* R/model-geosse.R: A ton of little updates to work better with
+	new support functions.
+
+	* R/model-ou.R: Added control argument, though it does nothing.
+
+	* R/plot-alt-extra.R: New trait.plot() function.
+
+	* R/plot-alt-util.R: New unexported "filled.arcs" function.
+
+	* R/plot-alt.: Minor tweaks.
+
+	* R/simulate-musse.R: Simulation support for musse.multitrait
+	trees.
+
+	* R/util.R: uniform prior was incorrect (but not in a way that
+	would affect calculations).
+
+	* man/make.bisseness.Rd: New documentation.
+
+	* man/make.bm.Rd: Updated to reflect control change.
+
+	* man/make.classe.Rd: New documentation
+
+	* man/make.geosse.Rd: Substantial updates
+
+	* man/simulate.Rd: Updates for tree.musse.multitrait
+
+	* man/trait.plot.Rd: New documentation
+
+	* src/bucexp.c: Remove print statements
+
+	* src/classe-eqs.c: New
+
+	* src/cvodes/*: Remapped printf -> Rprintf
+
+	* src/geosse-eqs.c: Small tidy up
+
+	* src/nuexp.f: BiSSE-ness unresolved clade calculations.
+
+2012-02-23  Rich FitzJohn  <fitzjohn@zoology.ubc.ca>
+
+	* DESCRIPTION: Bump to 0.8-4
+
+	* NAMESPACE: Updated to add bisseness
+
+	* R/mcmc.R: Additional argument checking.
+
+	* R/mle.R: Hardened version of anova.fit.mle that attempts to
+	check that models are truely nested.
+
+	* R/model-bd.R: find.mle.yule now returns class "fit.mle.bd" so
+	that it is clear that it can be compared against a bd fit.
+
+	* R/model-bisseness.R: Added skeleton for "unresolved" branches
+	function to clear up code.
+
+	* R/simulation.R: Added "bisseness" to list of possible tree types
+	that can be simulated.
+
+	* man/find.mle.Rd: Documented additional restrictions on model
+	comparison.
+
+	* man/make.bisse.Rd: Updated returned function definition.
+
+	* man/mcmc.Rd: Documented save.every/save.file arguments.
+
+	* man/simulate.Rd: Documented addition of bisseness simulator.
+
+2012-02-22  Rich FitzJohn  <fitzjohn@zoology.ubc.ca>
+
+	* R/model-bisseness.R: Added the "BiSSE-ness" model from Karen and Sally.
+
+2012-02-13  Rich FitzJohn  <fitzjohn@zoology.ubc.ca>
+
+	* DESCRIPTION: Bump R dependency up, and add support for current
+	deSolve.
+
+	* R/combine.R: First import of experimental likelihood combining
+	functions.
+
+	* R/diversitree-branches.R: Simplify treatment of root node.
+
+	* R/mcmc.R: Simplify mcmc function exit, and add support for
+	saving progress to a csv file during a run.
+
+	* R/model-bm-vcv.R: Fix treatment of NULL/0 meserr.
+
+	* R/plot-alt-extra.R: Fix treatment of stored angles.
+
+	* R/plot-alt.R: Cosmetics
+
+2012-01-05  Rich FitzJohn  <fitzjohn@zoology.ubc.ca>
+
+	* DESCRIPTION: Bump to 0.8-3
+
+	* NAMESPACE: New exports for mkn.ode, mkn.multitrait, ou,
+	geosse.split, sim.character, and others.
+
+	* R/asr-mkn.R: Adjust to the changes to mkn backends.
+
+	* R/check.R: BM parameter checking, split control checking.
+
+	* R/constrain.R: Constrained functions now handle additional
+	arguments.
+
+	* R/diversitree-branches-C.R: Fixed bug in cache translation for
+	some models (was failing to run previously).
+
+	* R/model-bisse-split.R: Abstract checking.
+
+	* R/model-bm-direct.R: New direct BM likelihood calculation (from
+	bbm).
+
+	* R/model-bm-vcv.R: Previous BM calculation
+
+	* R/model-bm.R: Now make.bm() has method argument to switch
+	between direct and vcv.
+
+	* R/model-geosse-split.R: Started adding (still unchecked).
+
+	* R/model-mkn-exp.R: Prevous mkn version (matrix exponentiation)
+
+	* R/model-mkn-multitrait.R: Multitrait version of the Mk model,
+	done as for MuSSE.
+
+	* R/model-mkn-ode.R: New ODE-based Mkn integrator, useful for high
+	k.
+
+	* R/model-mkn.R: Allows switching between ode and exp version.
+
+	* R/model-mkn-ode.R: ODE based branch-by-branch version of the Mk
+	model.  This is needed for very large trait space where it is
+	much more efficient to compute exp(Qt).v without storing
+	Pij=exp(Qt) directly.
+
+	* R/model-mkn.R: Allow switching backends.
+
+	* R/model-musse-multitrait.R: Change mcmc defaults
+
+	* R/model-musse-split.R: Abstract checking
+
+	* R/model-ou.R: Branch-by-branch calculation of OU, from bbm.
+
+	* R/model-quasse-common.R: Bring up to date with BM changes.
+
+	* R/model-quasse-{fftC,fftR,mol}.R: Bunchn of changes to handling
+	of badly behaved branches -- now split branches into parts if
+	integration fails.
+
+	* R/model-quasse-split.R: Now does caching branches so that only
+	some parts of the variables may need recomputing.  Will be
+	particularly useful during MCMC and ML searches with large
+	models.
+
+	* R/plot-alt.R: Fix x/y coordinates for fan plots.
+
+	* R/sim-character.R: Character simulation code.
+
+	* R/simulate-musse.R: Fixed bug that caused error when empty tree
+	was generated.
+
+	* R/split.R: Changes to allow caching branches.
+
+	* R/util.R: Uniform prior, and default setting function (modifies
+	a function's formals).
+
+	* man/*: Documentation updates.
+
+	* src/cvodes.c: Fixed compilation-preventing bug (reported by Jos
+	Kafer).
+
+	* src/mkn-eqs.c: Required support for the ODE based Mkn model.
+
+2011-11-03  Rich FitzJohn  <fitzjohn@zoology.ubc.ca>
+
+	* R/constrain.R: Allow variables used as constraints (on the RHS)
+	to be themselves constrained (on the LHS).
+
+2011-10-13  Rich FitzJohn  <fitzjohn@zoology.ubc.ca>
+
+	* DESCRIPTION: bump to 0.8-1
+
+	* NAMESPACE: New asr methods declared
+
+	* R/asr-bisse-split.R, asr-musse-split.R: New asr methods
+
+	* R/asr-bisse.R: Minor clarification in code
+
+	* R/asr.R, R/model-bd-ode.R, R/model-bisse.R, R/model-geosse.R,
+	R/model-musse.R, R/t.R, R/td.R:
+	branches() now takes 'index' argument.  Added.
+
+	* R/check.R: sampling.f check was incorrect.
+
+	* R/diversitree-branches.R: Added index argument to branches, and
+	other cleanup.
+
+	* R/model-bd-split.R: Cleanup
+
+	* R/model-bd-t.R: unresolved and sampling.f arguments were
+	transposed when checking, disabling sampling.f != 1. (reported by
+	Dan Rabosky).
+
+	* R/model-bisse-split.R, R/model-musse-split.R,
+	R/model-quasse-split.R: Reworked; should be more reliable now.
+
+	* R/model-quasse-common.R: Now allows different diffusion
+	parameters.
+
+	* R/model-quasse-fftC.R: Simpify away an old optimisation.
+
+	* R/model-quasse.R: Minor tidyup.
+
+	* R/plot-alt-extra.R, R/plot-alt-util.R: Pass additional arguments
+	of group.label.tip.rad() to radial.text() to text()
+
+	* R/split.R: Totally reworked.
+
+	* R/util.R: Updated to work with deSolve 1.10-3
+
+	* configure.ac: Revert to controllable strict gcc checking (off
+	again by default).
+
+	* man/*: Assorted documentation updates.
+
+2011-07-11  Rich FitzJohn  <fitzjohn@zoology.ubc.ca>
+
+	* DESCRIPTION: bump to 0.7-6
+
+	* NAMESPACE: New "musse.multitrait" exports (see below)
+
+	* R/check.R: There was an error in checking states when
+	strict=FALSE (values were never checked to see if they were valid,
+	as was advertised).  check.unresolved.bd added (taken from
+	make.bd, and used by make.bd.split).
+
+	* R/diversitree-branches.R: Individual tip conditions added for
+	make.branches.matrix.  dt.tips.ordered() rewritten.
+
+	* R/history.R: Minor tweaks
+
+	* R/model-bd-split.R: Use with unresolved clades was totally
+	broken (but failed to even run, so no harm done). 
+
+	* R/model-bd.R: Minor tweaks while tidying up model-bd-split.R
+
+	* R/model-musse-multitrait.R: Alternative reparametrisation of
+	MuSSE when the multistate character is really combinations of
+	binary traits.
+
+	* R/simulation.R: Simulation code was returning events in
+	incorrect order.
+
+	* man/*: minor documentation changes
+
+	* src/cvodes_asr_marginal.c,mkn.c,mkn.h: Tweaks to compile under
+	windows.
+
+2011-06-03  Rich FitzJohn  <fitzjohn@zoology.ubc.ca>
+
+	* DESCRIPTION: bump to 0.7-4
+
+	* R/asr-bisse.R: General cleanup and remove obsolete options.
+
+	* R/asr-mkn.R: Cleanup, especially parameter handling and actual
+	simulation.
+
+	* R/asr-musse.R: General cleanup and remove obsolete options.
+	Simpler parameter handling.
+
+	* R/asr.R: Reimplimented asr on constrained models.  General tidy
+	up.
+
+	* R/check.R: New BiSSE/MuSSE parameter checking that will end up
+	applied to more functions over time.
+
+	* R/constrain.R: Tidy up
+
+	* R/diversitree-branches-C.R: Moved do.marginal.asr.C into asr.R.
+
+	* R/diversitree-branches.R: Substantial simplification to
+	all.branches.matrix().  Removed cleanup().
+
+	* R/model-bisse-split.R: Tidy to parallel model-musse-split.R
+
+	* R/model-mkn.R: Cleanup, especially parameter handling.
+
+	* Other files: General cleanup
+
+2011-06-01  Rich FitzJohn  <fitzjohn@zoology.ubc.ca>
+
+	* Many files: reworked internals to use matrices rather than lists
+	where possible to simplify the ASR code.  Slight efficiency gain,
+	too.
+
+2011-05-31  Rich FitzJohn  <fitzjohn@zoology.ubc.ca>
+
+	* R/asr-mkn.R: Faster joint and stochastic reconstructions through
+	the new C code; (still optional)
+
+	* R/asr.R: Faster joint reconstructions through the new C
+	code; (still optional)
+
+	* R/diversitree-branches.R: Prepping for big change
+
+	* R/mcmc.R: Additional ... arguments being passed to prior with
+	poor effects.
+
+	* R/model-mkn.R: No longer ever return lists as intermediate
+	output.
+
+	* R/util.R: Temporary fix for older R versions
+
 2011-05-12  Rich FitzJohn  <fitzjohn@zoology.ubc.ca>
 
 	* DESCRIPTION: Bump to 0.7-2

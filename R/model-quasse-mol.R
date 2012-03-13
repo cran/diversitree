@@ -1,4 +1,4 @@
-## TODO:
+## TODO
 ## 1. check that time is entirely completed.  This is important (done)
 ## 2. Remove saveOut() if possible for a 7% speedup, mostly by losing
 ##    the method dispatch on the transpose operation.
@@ -6,7 +6,10 @@
 ##    do with the f.hi/f.lo combination, but there might be some hints
 ##    in the bisse.td code on how to do this nicely.
 ## 4. Tunable accuracy, probably via control.
+## 5. Have a look at the PDE/deSolve manual for possibly a faster way
+##    of doing this.
 
+## This function probably should not be taken too seriously.
 make.branches.quasse.mol <- function(control) {
   nx <- control$nx
   dx <- control$dx
@@ -35,6 +38,11 @@ make.pde.quasse.mol <- function(nx, dx, nd, atol, rtol) {
     if ( abs(ans[length(len)+1,1] - (t0 + len)) > 1e-8 )
       stop("Integration error: integration stopped prematurely")
     
-    matrix(ans[-1,-1], nx, nd)
+    ans <- matrix(ans[-1,-1], nx, nd)
+    ## Do the log compensation here, to make the careful calcuations
+    ## easier later.
+    q <- sum(ans[,2]) * dx
+    ans[,2] <- ans[,2] / q
+    list(log(q), ans)
   }
 }

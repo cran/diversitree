@@ -1,6 +1,7 @@
 #include <R.h>
 #include <Rinternals.h>
 
+#include "config.h"
 #ifdef WITH_CVODES
 
 #include "cvodes/include/cvodes/cvodes.h"
@@ -10,8 +11,10 @@
 #include "cvodes_obj.h"
 #include "cvodes_all_branches.h"
 
-void asr_normalise(int n_states, double *vals);
-void asr_marginal_1(dt_obj *obj, double *pars, int node, int *parent);
+#include "mkn.h"
+
+void asr_marginal_1(dt_obj *obj, double *pars, int node, 
+		    int *parent);
 
 /* Needed:
    extPtr: pointer containing the dt_obj object
@@ -41,7 +44,7 @@ SEXP r_asr_marginal(SEXP extPtr, SEXP r_pars, SEXP r_nodes,
 
   SEXP ret, r_root_vals, r_lq, R_fcall, tmp;
 
-  lq   = (double*) R_alloc(n_out * neq, sizeof(double));
+  lq   = (double*) R_alloc(n_out,       sizeof(double));
   init = (double*) R_alloc(n_out * neq, sizeof(double));
   base = (double*) R_alloc(n_out * neq, sizeof(double));
 
@@ -117,18 +120,6 @@ void asr_marginal_1(dt_obj *obj, double *pars, int node,
     ic(neq, base + neq*kids[0], base + neq*kids[1],
        pars, depth[idx], vals);
   }
-}
-
-void asr_normalise(int n_states, double *vals) {
-  int i;
-  double maxp = R_NegInf, tot = 0.0;
-  for ( i = 0; i < n_states; i++ )
-    if ( vals[i] > maxp )
-      maxp = vals[i];
-  for ( i = 0; i < n_states; i++ )
-    tot += vals[i] = exp(vals[i] - maxp);
-  for ( i = 0; i < n_states; i++ )
-    vals[i] /= tot;
 }
 
 #endif

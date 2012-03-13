@@ -1,6 +1,7 @@
 #include <R.h>
 #include <Rinternals.h>
 
+#include "config.h"
 #ifdef WITH_CVODES
 
 #include "cvodes/include/cvodes/cvodes.h"
@@ -102,8 +103,8 @@ SEXP r_get_vals(SEXP extPtr) {
   double *tip_y;
 
   PROTECT(ret = allocVector(VECSXP, 3));
-  PROTECT(r_init = allocMatrix(REALSXP, n_out, neq));
-  PROTECT(r_base = allocMatrix(REALSXP, n_out, neq));
+  PROTECT(r_init = allocMatrix(REALSXP, neq, n_out));
+  PROTECT(r_base = allocMatrix(REALSXP, neq, n_out));
 
   PROTECT(lq   = allocVector(REALSXP, n_out));
   SET_VECTOR_ELT(ret, 0, r_init);
@@ -113,13 +114,9 @@ SEXP r_get_vals(SEXP extPtr) {
   base = REAL(r_base);
   init = REAL(r_init);
 
-  /* This is awkward, as we have to transpose */
-  for ( i = 0, k = 0; i < n_out; i++ ) {
-    for ( j = 0; j < neq; j++, k++ ) {
-      base[i + j*n_out] = obj->base[k];
-      init[i + j*n_out] = obj->init[k];
-    }
-  }
+  memcpy(base,     obj->base, n_out * neq * sizeof(double));
+  memcpy(init,     obj->init, n_out * neq * sizeof(double));
+  memcpy(REAL(lq), obj->lq,   n_out *       sizeof(double));
 
   /* And then we have to copy the tip information in too... */
   for ( i = 0; i < obj->tip_types; i++ ) {
@@ -128,10 +125,13 @@ SEXP r_get_vals(SEXP extPtr) {
     tip_target = obj->tip_target[i];
     for ( j = 0; j < neq; j++ )
       for ( k = 0; k < tip_n; k++ ) 
-	init[j * n_out + tip_target[k]] = tip_y[j];
+	memcpy(init + tip_target[k] * neq, tip_y, neq * sizeof(double));
   }
 
-  memcpy(REAL(lq),   obj->lq,   n_out * sizeof(double));
+  /* Strictly, we should set the root to NA */
+  j = obj->root * neq;
+  for ( i = 0; i < neq; i++ )
+    base[j + i] = NA_REAL;
 
   UNPROTECT(4);
   return ret;
@@ -245,6 +245,9 @@ void dt_setup_tips(dt_obj *obj, SEXP cache) {
     obj->tip_y[i]      = calloc(neq, sizeof(double));
     obj->tip_len[i]    = calloc(n_i, sizeof(double));
     obj->tip_target[i] = calloc(n_i, sizeof(int));
+
+    if ( LENGTH(tip_y) != neq )
+      error("Incorrect size initial conditions");
 
     memcpy(obj->tip_y[i],   REAL(tip_y),   neq*sizeof(double));
     memcpy(obj->tip_len[i], REAL(tip_len), n_i*sizeof(double));
@@ -436,5 +439,24 @@ SEXP getListElement(SEXP list, const char *str) {
 
   return elmt;
 } 
+
+/* I wonder if the problem is the tips? */
+SEXP r_dt_debug(SEXP extPtr) {
+  dt_obj *obj = (dt_obj*)R_ExternalPtrAddr(extPtr);
+  SEXP ret;
+  int tip_types = obj->tip_types, neq = obj->neq;
+  double *tmp;
+  int i;
+
+  PROTECT(ret = allocMatrix(REALSXP, neq, tip_types));
+  for ( i = 0; i < tip_types; i++ ) {
+    tmp = REAL(ret) + i*neq;
+    memcpy(tmp, obj->tip_y[i], neq*sizeof(double));
+  }
+
+  UNPROTECT(1);
+
+  return ret;
+}
 
 #endif

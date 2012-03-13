@@ -81,7 +81,7 @@ cvodes.sens <- function(n.var, n.par, derivs, sens1, rtol, atol,
 
 ## See check.fftC()
 check.cvodes <- function(error=TRUE) {
-  ok <- is.loaded("r_make_cvodes")
+  ok <- is.loaded("r_make_cvodes", "diversitree")
   if ( error && !ok )
     stop("diversitree built without CVODES support")
   ok

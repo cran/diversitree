@@ -1,9 +1,3 @@
-## TODO:
-## One complication here is that without evaluating the functions
-## (which requires an initial position) we have no way of knowing how
-## many parameters should/will be created.  This will need to be added
-## to the C code.
-
 ## There is a chance here that it will end up being just as efficient
 ## (and a bit clearer) to have the calculations done purely in R.  I
 ## should check this at some point.
@@ -30,64 +24,9 @@ check.f.t <- function(f) {
   length(args) - 1
 }
 
-## TODO: I should assert somewhere that the return values of the
-## functions are scalars.  This is enforced by the out[[i]], but this
-## will lead to cryptic error messages.
-## make.pars.t <- function(...) {
-##   functions <- list(...)
-##   n <- sapply(functions, check.f.t)
-##   idx <- split(seq_len(sum(n)), rep(seq_along(n), n))
-##   n.args <- sum(n)
-##   n.types <- length(idx)
-##   idx.seq <- seq_along(idx)
-
-##   is.constant <- sapply(functions, identical, constant.t)
-##   idx.constant <- unlist(idx[is.constant])
-
-##   is.var <- !is.constant
-##   idx.var <- idx[is.var]
-##   i.var <- which(is.var)
-
-##   out <- numeric(length(functions))
-
-##   ret <- function(pars) {
-##     if ( length(pars) != n.args )
-##       stop(sprintf("Invalid argument length: expected %d", n.args))
-##     names(pars) <- NULL # because of do.call
-##     out[is.constant] <- pars[idx.constant]
-    
-##     function(t) {
-##       ## Surprisingly, this for loop was faster than lapply.
-##       for ( i in i.var )
-##         out[[i]] <- do.call(functions[[i]],
-##                             c(list(t), pars[idx[[i]]]))
-##       out
-##     }
-##   }
-
-##   ## Build argument names.
-##   if ( is.null(names(functions)) )
-##     stop("functions list must be named")
-##   argnames <- vector("list", length(functions))
-##   argnames[is.constant] <- names(functions)[is.constant]
-##   argnames[is.var] <-
-##     lapply(names(functions)[is.var], function(i)
-##            paste(i, names(formals(functions[[i]]))[-1], sep="."))
-##   argnames <- unlist(argnames)
-##   if ( any(duplicated(argnames)) )
-##     stop("Duplicate argument names: consider different prefixes?")
-  
-##   attr(ret, "n.args") <- n.args
-##   attr(ret, "argnames") <- argnames
-##   attr(ret, "is.constant.f") <- is.constant
-##   attr(ret, "is.constant.arg") <- rep(is.constant, n)
-       
-##   ret
-## }
-
 make.initial.conditions.t <- function(initial.conditions) {
-  function(init, pars, t, is.root=FALSE)
-    initial.conditions(init, pars(t), t, is.root)
+  function(init, pars, t, idx)
+    initial.conditions(init, pars(t), t, idx)
 }
 
 ## This is identical to the version in diversitree-branches.R, except
@@ -97,13 +36,19 @@ ll.xxsse.t <- function(pars, cache, initial.conditions,
                        intermediates) {
   pars.root <- pars(cache$depth[cache$root])
 
-  ans <- all.branches(pars, cache, initial.conditions, branches)
-  vals <- ans$init[[cache$root]]
+  ans <- all.branches.matrix(pars, cache, initial.conditions, branches)
+  vals <- ans$init[,cache$root]
   root.p <- root.p.xxsse(vals, pars.root, root, root.p)
   loglik <- root.xxsse(vals, pars.root, ans$lq, condition.surv,
                        root.p)
-  ans$root.p <- root.p
-  cleanup(loglik, pars, intermediates, cache, ans)
+
+  if ( intermediates ) {
+    ans$root.p <- root.p
+    attr(loglik, "intermediates") <- ans
+    attr(loglik, "vals") <- vals
+  }
+
+  loglik  
 }
 
 check.functions.t <- function(functions) {
@@ -173,14 +118,14 @@ make.ode.branches.t <- function(model, dll, neq, np, comp.idx, control) {
   br <- make.ode.branches(model, dll, neq, np, comp.idx, control)
   e <- new.env()
   if ( control$backend == "deSolve" ) {
-    function(y, len, pars, t0)
-      br(y, len, list(pars, e), t0)
+    function(y, len, pars, t0, idx)
+      br(y, len, list(pars, e), t0, idx)
   } else {
     setfunc <- sprintf("r_set_tfunc_%s", model)
     dummy <- rep(0.0, np)
-    function(y, len, pars, t0) {
+    function(y, len, pars, t0, idx) {
       .Call(setfunc, pars, e, PACKAGE=dll)
-      br(y, len, dummy, t0)
+      br(y, len, dummy, t0, idx)
     }
   }
 }

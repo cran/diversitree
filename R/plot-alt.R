@@ -37,10 +37,10 @@ plot2.phylo <- function(x, type="phylogram", use.edge.length=TRUE,
   ## Difference: I think this is handled differently by ape
   ## Repeat arguments appropriately - all called functions may rely on
   ## these being appropriately vectorised.
-  tip.color <- rep(tip.color, length=n.tip)
-  edge.color <- rep(edge.color, length=nrow(x$edge))
-  edge.width <- rep(edge.width, length=nrow(x$edge))
-  edge.lty <- rep(edge.lty, length=nrow(x$edge))
+  tip.color <- rep(tip.color, length.out=n.tip)
+  edge.color <- rep(edge.color, length.out=nrow(x$edge))
+  edge.width <- rep(edge.width, length.out=nrow(x$edge))
+  edge.lty <- rep(edge.lty, length.out=nrow(x$edge))
 
   ## TODO: the clade borders need repeating here?
 
@@ -100,6 +100,7 @@ plot2.phylo <- function(x, type="phylogram", use.edge.length=TRUE,
   
   xy <- pp.node.coords(x)
   xy.seg <- pp.coords(x, xy)
+ 
   lims <- pp.lim(x, xy, x.lim, y.lim, cex,
                  show.tip.label, label.offset + pad)
   plot(NA, type="n", xlim=lims$xlim, ylim=lims$ylim, xlab="",
@@ -113,6 +114,9 @@ plot2.phylo <- function(x, type="phylogram", use.edge.length=TRUE,
       x$tip.label <- gsub("_", " ", x$tip.label)
     pp.tiplabel(x, xy, label.offset, adj, cex, tip.color, font)
   }
+
+  if ( type == "fan" )
+    xy <- pp.coords.fix.xy(x, xy)
 
   ## This has all the arguments below for compatibility with ape.
   ret <- list(type=type, use.edge.length=use.edge.length,
@@ -188,6 +192,17 @@ pp.coords.fan <- function(phy, xy) {
   xy.seg
 }
 
+pp.coords.fix.xy <- function(phy, xy) {
+  n <- length(phy$tip.label) + sum(phy$n.taxa - 1)  
+  xy$theta <- xy$y / (n + 1) * 2 * pi
+  xy$r <- xy$x
+
+  xy$xx <- with(xy, r * cos(theta))
+  xy$yy <- with(xy, r * sin(theta))
+
+  xy
+}
+
 ## Compute limits for the plot.
 pp.lim.phylogram <- function(x, xy, xlim, ylim, cex,
                              show.tip.label, label.offset) {
@@ -242,13 +257,16 @@ pp.segments.phylogram <- function(phy, xy.seg, col, lwd, lty) {
 
 ## TODO: There is no way of modifying the np here.
 pp.segments.fan <- function(phy, xy.seg, col, lwd, lty, np=1000) {
+  if ( length(col) == 1 ) col <- rep(col, nrow(phy$edge))
+  if ( length(lwd) == 1 ) lwd <- rep(lwd, nrow(phy$edge))
+  if ( length(lty) == 1 ) lty <- rep(lty, nrow(phy$edge))
   xy.seg2 <- split(xy.seg, xy.seg$horiz)
-  i <- match(seq_len(phy$Nnode) + length(phy$tip.label), phy$edge[,2])
-  
   with(xy.seg2[[2]],
        segments(r0*cos(theta0), r0*sin(theta0),
                 r1*cos(theta1), r1*sin(theta1),
                 lwd=lwd, col=col))
+
+  i <- match(seq_len(phy$Nnode) + length(phy$tip.label), phy$edge[,2])
   if ( any(!is.na(i)) ) # For a two branch tree.
     with(xy.seg2[[1]],
          arcs(theta0, theta1, r1, col[i], lty[i], lwd[i], np))

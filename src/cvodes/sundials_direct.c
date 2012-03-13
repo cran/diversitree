@@ -15,8 +15,13 @@
  * -----------------------------------------------------------------
  */ 
 
+/* RGF: printf is not allowed */
 #include <stdio.h>
 #include <stdlib.h>
+
+#include <R.h>
+#undef printf
+#define printf Rprintf
 
 #include <sundials/sundials_direct.h>
 #include <sundials/sundials_math.h>

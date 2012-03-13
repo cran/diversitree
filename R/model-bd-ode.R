@@ -20,19 +20,15 @@ make.bd.ode <- function(tree, sampling.f=NULL, unresolved=NULL,
   cache <- make.cache.bd.ode(tree, sampling.f, unresolved)
 
   if ( backend == "CVODES" )
-    all.branches <- make.all.branches.C.bd(cache, control)
+    all.branches <- make.all.branches.C.bd.ode(cache, control)
   else
-    branches <- make.branches.bd(cache, control)
+    branches <- make.branches.bd.ode(cache, control)
     
   const <- lfactorial(length(tree$tip.label) - 1)
 
-  ll.bd.ode <- function(pars, condition.surv=TRUE,
-                        intermediates=FALSE) {
-    if ( length(pars) != 2 )
-      stop("Invalid parameter length (expected 2)")
-    if ( any(pars < 0) || any(!is.finite(pars)) )
-      return(-Inf)
-
+  ll <- function(pars, condition.surv=TRUE,
+                    intermediates=FALSE) {
+    check.pars.bd(pars)
     if ( backend == "CVODES" )
       ll.xxsse.C(pars, all.branches,
                  condition.surv, ROOT.FLAT, NULL,
@@ -43,8 +39,8 @@ make.bd.ode <- function(tree, sampling.f=NULL, unresolved=NULL,
                intermediates) + const
   }
   
-  class(ll.bd.ode) <- c("bd.ode", "bd", "function")
-  ll.bd.ode
+  class(ll) <- c("bd", "function")
+  ll
 }
 
 ## 2: print: from bd
@@ -64,6 +60,7 @@ make.cache.bd.ode <- function(tree, unresolved, sampling.f) {
     sampling.f <- check.sampling.f(sampling.f, 1)
 
   cache <- make.cache(tree)
+  cache$ny <- 2L
   cache$unresolved <- unresolved
   cache$sampling.f <- sampling.f
   cache$y <- initial.tip.bd.ode(cache)
@@ -82,18 +79,18 @@ initial.tip.bd.ode <- function(cache) {
 ## 6: ll: internal
 
 ## 7: initial.conditions:
-initial.conditions.bd.ode <- function(init, pars, t, is.root=FALSE)
-  c(init[[1]][1], init[[1]][2] * init[[2]][2] * pars[1])
+initial.conditions.bd.ode <- function(init, pars, t, idx)
+  c(init[1,1], init[2,1] * init[2,2] * pars[1])
 
 ## 8: branches
-make.branches.bd <- function(cache, control) {
+make.branches.bd.ode <- function(cache, control) {
   neq <- 2L
   np <- 2L
   comp.idx <- 2L
   make.ode.branches("bd", "diversitree", neq, np, comp.idx, control)
 }
 
-make.all.branches.C.bd <- function(cache, control) {
+make.all.branches.C.bd.ode <- function(cache, control) {
   neq <- 2L
   np <- 2L
   comp.idx <- 2L

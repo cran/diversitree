@@ -1,11 +1,13 @@
 Package: diversitree
-Title: diversitree: comparative phylogenetic tests of diversification
-Version: 0.7-2
-Date: 2010-05-12
-Author: Richard G. FitzJohn <fitzjohn@zoology.ubc.ca>, with GeoSSE by
-        Emma E. Goldberg <eeg@uic.edu>.
+Title: diversitree: comparative phylogenetic analyses of
+        diversification
+Version: 0.9-1
+Date: 2012-03-13
+Author: Richard G. FitzJohn <fitzjohn@zoology.ubc.ca>, with GeoSSE and
+        ClaSSE by Emma E. Goldberg <eeg@uic.edu>, and BiSSE-ness by
+        Karen Magnuson-Ford.
 Maintainer: Richard G. FitzJohn <fitzjohn@zoology.ubc.ca>
-Depends: R (>= 2.4), deSolve (>= 1.7), ape, subplex
+Depends: R (>= 2.10), deSolve (>= 1.7), ape, subplex
 Suggests: numDeriv, tgp, multicore, minqa
 SystemRequirements: fftw3 (>= 3.1.2)
 Description: Contains a number of comparative phylogenetic methods,
@@ -15,13 +17,14 @@ Description: Contains a number of comparative phylogenetic methods,
         56: 701) and its unresolved tree extensions (FitzJohn et al.
         2009: Syst. Biol. 58: 595), MuSSE (Multiple State Speciation
         and Extinction), QuaSSE (Quantitative State Speciation and
-        Extinction; FitzJohn 2010: Syst. Biol. 69: 619), and GeoSSE
+        Extinction; FitzJohn 2010: Syst. Biol. 59: 619), GeoSSE
         (Geographic State Speciation and Extinction; Goldberg et al.
-        2011: Syst. Biol.). Other included methods include Markov
+        2011: Syst. Biol. 60: 451), and BiSSE-ness (Magnuson-Ford and
+        Otto 2012: Am. Nat.)  Other included methods include Markov
         models of discrete and continuous trait evolution and constant
         rate speciation and extinction.
 License: GPL (>= 2)
 URL: http://www.zoology.ubc.ca/prog/diversitree
-Packaged: 2011-05-13 02:14:58 UTC; rich
+Packaged: 2012-03-15 01:50:00 UTC; rich
 Repository: CRAN
-Date/Publication: 2011-05-13 06:57:59
+Date/Publication: 2012-03-15 05:19:17

@@ -55,7 +55,6 @@ count.eval <- function(f) {
 }
 
 ## Known to work on 1.3-1.6
-## TODO: fall back on "safe" with a warning if the an unknown version.
 make.ode <- function(func, dllname, initfunc, ny, safe=FALSE) {
   if (!is.character(func)) 
     stop("`func' must be a character vector")
@@ -63,9 +62,12 @@ make.ode <- function(func, dllname, initfunc, ny, safe=FALSE) {
     stop("You need to specify the name of the dll or shared library where func can be found (without extension)")
 
   if ( safe ) {
-    function(y, times, parms, rtol, atol)
-      t(lsoda(y, times, parms, rtol=rtol, atol=atol,
-              initfunc=initfunc, func=func, dllname=dllname))
+    function(y, times, parms, rtol, atol) {
+      ret <- t(lsoda(y, times, parms, rtol=rtol, atol=atol,
+                     initfunc=initfunc, func=func, dllname=dllname))
+      dimnames(ret) <- NULL
+      ret
+    }
   } else {
     initfunc.addr <- getNativeSymbolInfo(initfunc, PACKAGE=dllname)$address
     derivfunc.addr <- getNativeSymbolInfo(func, PACKAGE=dllname)$address
@@ -82,7 +84,7 @@ make.ode <- function(func, dllname, initfunc, ny, safe=FALSE) {
     iwork[2] <- as.integer(1)    # bandup
     iwork[6] <- as.integer(5000) # maxsteps
 
-    rwork <- vector("double", 20) # TODO: 5, 6 do nothing.
+    rwork <- vector("double", 20)
     rwork[5] <- 0                     # hini
     rwork[6] <- 10                    # hmax (consider 0)
     rwork[7] <- 0                     # hmin
@@ -137,8 +139,18 @@ make.ode <- function(func, dllname, initfunc, ny, safe=FALSE) {
       ret
     }
 
-    vers <-  packageVersion("deSolve")
-    max.deSolve <- package_version("1.10")
+
+    ## Temporary fix so that I can work on the cluster.  This will be
+    ## removed and DESCRIPTION updated to require R 2.12.0 or
+    ## greater.
+    if ( getRversion() >= "2.12.0" ) {
+      vers <-  packageVersion("deSolve")
+    } else {
+      vers <- package_version(packageDescription("deSolve",
+                                                 fields="Version"))
+    }
+    ## Update here when deSolve is updated.
+    max.deSolve <- package_version("1.10-3")
     if ( vers > max.deSolve ) {
       str <- paste("diversitree is not known to work with deSolve > ",
                    max.deSolve, "\n\tfalling back on slow version")
@@ -157,7 +169,7 @@ quadratic.roots <- function(a, b, c)
 
 
 discretize <- function(x, n, r=range(x)) {
-  at <- seq(r[1], r[2], length=n+1)
+  at <- seq(r[1], r[2], length.out=n+1)
   as.integer(cut(x, at, include.lowest=TRUE, labels=FALSE))
 }
 
@@ -183,6 +195,22 @@ make.prior.ExpBeta <- function(r, beta) {
   }
 }
 
+## TODO: Allow vector lower and upper here...
+make.prior.uniform <- function(lower, upper) {
+  if ( length(lower) == 2 && missing(upper) ) {
+    upper <- lower[2]
+    lower <- lower[1]
+  }
+  n <- length(lower)
+  if ( length(upper) != n )
+    stop("'lower' and 'upper' both be the same length")
+  p <- log(1/(upper - lower))
+  function(x) {
+    ret <- rep(p, length.out=length(x))
+    ret[x < lower | x > upper] <- 0
+    ret
+  }
+}
 
 ## This is the same as the function in quasse2
 descendants <- function(node, edge) {
@@ -290,3 +318,11 @@ argnames.twopart.set <- function(x, value, n.base, n.level) {
   x
 }
 
+set.defaults <- function(f, defaults) {
+  if ( is.null(defaults) )
+    return(f)
+  if ( !all(names(defaults) %in% names(formals(f))) )
+    stop("Unknown defaults")
+  formals(f)[names(defaults)] <- defaults
+  f
+}

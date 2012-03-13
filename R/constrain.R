@@ -3,18 +3,11 @@ argnames <- function(x, ...)
   UseMethod("argnames")
 `argnames<-` <- function(x, value)
   UseMethod("argnames<-")
-## argnames.default <- function(x, ...)
-##   attr(x, "argnames")
-## `argnames<-.default` <- function(x, value) {
-##   attr(x, "argnames") <- value
-##   x
-## }
 `argnames<-.constrained` <- function(x, value) {
   stop("Cannot set argnames on constrained function")
 }
 argnames.constrained <- function(x, ...)
   environment(x)$names.rhs
-
 
 ## The LHS of a formula must be a single variable name that exists in
 ## "names.lhs"
@@ -42,8 +35,6 @@ argnames.constrained <- function(x, ...)
 ## both:
 ##   foo(f, lambda0 ~ r0/(1 - e0), lambda1 ~ r1/(1 - e1),
 ##       r0 * e0 / (1 - e0), r1 * e1 / (1 - e1))
-
-## TODO: Check that lhs does not appear on the rhs
 constrain.parse <- function(formula, names.lhs, names.rhs,
                             extra=NULL) {
   formula <- as.formula(formula)
@@ -55,8 +46,9 @@ constrain.parse <- function(formula, names.lhs, names.rhs,
   ## Checking the lhs is easy: is the lhs in the list of allowable
   ## names and of length 1?  Anything that does not match this is
   ## invalid.
-  if ( !is.name(lhs) || is.na(match(as.character(lhs), names.lhs)) )
+  if ( !is.name(lhs) )
     stop("Invalid target on LHS of formula" )
+  lhs.is.target <- is.na(match(as.character(lhs), names.lhs))
 
   ## Checking the rhs is more difficult.  We are OK if any of the
   ## following is met:
@@ -84,7 +76,9 @@ constrain.parse <- function(formula, names.lhs, names.rhs,
   } else if ( !is.numeric(rhs) ) {
     stop("RHS must be expression, variable or number")
   }
-  list(lhs, rhs)
+  res <- list(lhs, rhs)
+  attr(res, "lhs.is.target") <- lhs.is.target
+  res
 }
 
 ## First up, consider the one-shot case: don't worry about incremental
@@ -101,7 +95,6 @@ constrain.parse <- function(formula, names.lhs, names.rhs,
 ## the "paired" parameters here to avoid using eval where
 ## unnecessary.  However, this makes the function substantially uglier
 ## for a very minor speedup.
-
 constrain <- function(f, ..., formulae=NULL, names=argnames(f),
                       extra=NULL) {
   if ( inherits(f, "constrained") ) {
@@ -115,6 +108,20 @@ constrain <- function(f, ..., formulae=NULL, names=argnames(f),
   
   for ( formula in formulae ) {
     res <- constrain.parse(formula, names.lhs, names.rhs, extra)
+    if ( attr(res, "lhs.is.target") ) {
+      i <- which(sapply(rels, function(x) identical(x, res[[1]])))
+      rels[i] <- res[[2]]
+
+      ## This will not work with *expressions* involving the LHS; that
+      ## would require rewriting the expressions themselves (which
+      ## would not be too hard to do).  But for now let's just cause
+      ## an error...
+      lhs.txt <- as.character(res[[1]])
+      if ( any(sapply(rels, function(x) lhs.txt %in% all.vars(x))) )
+        stop(sprintf("lhs (%s) is in an expression and can't be constrained",
+                     lhs.txt))
+    }
+    
     names.lhs <- setdiff(names.lhs, unlist(lapply(res, all.vars)))
     names.rhs <- setdiff(names.rhs, as.character(res[[1]]))
     rels <- c(rels, structure(res[2], names=as.character(res[[1]])))
@@ -190,12 +197,12 @@ update.constrained <- function(object, free, ...) {
 ## (not exported)
 constrain.i <- function(f, p, i) {
   n <- length(i)
-  g <- function(x) {
+  g <- function(x, ...) {
     if ( length(x) != n )
       stop(sprintf("Incorrect parameter length: expected %d, got %d",
                    n, length(x)))
     p[i] <- x
-    f(p)
+    f(p, ...)
   }
 
   class(g) <- c("constrained.i", class(f)) # HACK!

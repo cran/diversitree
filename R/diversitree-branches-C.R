@@ -11,14 +11,12 @@ toC.cache <- function(cache, comp.idx) {
   ## Translate tips...
   if ( is.null(cache$y) || length(cache$y) == 0 )
     stop("Can't do tipless yet...")
-  f <- function(x) {
-    len <- x$t.uniq[x$unpack]
-    list(tip.y = as.numeric(x$y),
-         tip.len   = sort(len),
-         tip.target= toC.int(x$target[order(len)]))
-  }
+  f <- function(x)
+    list(tip.y     = as.numeric(x$y),
+         tip.len   = x$t,
+         tip.target= toC.int(x$target))
+
   cache$y <- lapply(cache$y, f)
-  
 
   cache$children <- toC.int(t(cache$children))
   cache$parent   <- toC.int(cache$parent)
@@ -75,27 +73,10 @@ ll.xxsse.C <- function(pars, all.branches,
   loglik <- root.xxsse(vals, pars, ans[[1]], condition.surv, root.p)
 
   if ( intermediates ) {
-    ## attr(loglik, "cache") # can't provide this one
     ans$intermediates$root.p <- root.p
     attr(loglik, "intermediates") <- ans$intermediates
     attr(loglik, "vals") <- vals
   }
 
   loglik
-}
-
-do.asr.marginal.C <- function(pars, cache, ptr, nodes, states.idx.C,
-                              parent.C, all.branches.C, root.f, env) {
-  if ( is.null(nodes) )
-    nodes <- cache$root:max(cache$order)
-  else
-    nodes <- nodes + cache$n.tip
-
-  ## Initial run through sets up the internal data structures (never
-  ## used here)
-  ignore <- all.branches.C(pars)
-
-  ## Then we actually compute the marginal ASRs:
-  .Call("r_asr_marginal", ptr, pars, toC.int(nodes),
-        states.idx.C, parent.C, root.f, env)
 }
