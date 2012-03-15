@@ -28,8 +28,7 @@ make.pde.quasse.fftC <- function(nx, dx, dt.max, nd, flags) {
   ptr <- .Call("r_make_quasse_fft", as.integer(nx), as.numeric(dx),
                as.integer(nd), as.integer(flags),
                PACKAGE="diversitree")
-  function(y, len, pars, t0) {
-    ## TODO: add basic error checking here
+  function(y, len, pars, t0, dt=dt.max) {
     nt <- as.integer(ceiling(len / dt.max))
     dt <- len / nt
     if ( !(length(y) %in% (nd * nx)) )
@@ -41,10 +40,21 @@ make.pde.quasse.fftC <- function(nx, dx, dt.max, nd, flags) {
       stop("Incorrect length pars")
     if ( pars$diffusion <= 0 )
       stop("Invalid diffusion parameter")
-      
-    .Call("r_do_integrate",
-          ptr, y, pars$lambda, pars$mu, pars$drift, pars$diffusion,
-          nt, dt, pars$padding, PACKAGE="diversitree")
+    
+    ans <- .Call("r_do_integrate",
+                 ptr, y, pars$lambda, pars$mu,
+                 pars$drift, pars$diffusion,
+                 nt, dt, pars$padding, PACKAGE="diversitree")
+
+    ## Do the log compensation here, to make the careful calcuations
+    ## easier later.
+    if ( ncol(ans) > 1 ) {
+      q <- sum(ans[,2]) * dx
+      ans[,2] <- ans[,2] / q
+      list(log(q), ans)
+    } else {
+      list(0, ans)
+    }
   }
 }
 
@@ -65,7 +75,7 @@ make.tips.quasse.fftC <- function(control, t, tips) {
 
   j <- which(tt > tc)[1]
   if ( is.na(j) )
-    ## TODO:
+    ## TODO: Fix this bug at some point (not a huge priority, really)
     stop("Please reduce tc (but this is a bug)!")
 
   nd.hi <- nd[1:j]
@@ -152,44 +162,20 @@ make.branches.aux.quasse.fftC <- function(control, sampling.f) {
   function(i, len, pars) {
     if ( i > n )
       stop("No such partition")
-    ndat <- length(pars$lambda)
+    if ( length(len) > 1 )
+      stop("Can't do this any more.")
 
-    ## TODO: This is a hack - the depths should be sanitised before
-    ## getting here.
-    ## This is a bit of a hack.  However, the times should arrive more
-    ## or less sorted, and any differences should be rounding error.
-    ## This will perform badly where there are a number of very short
-    ## branches that have come out of a polytomy resolution.
-    dl <- diff(len)
-    if ( length(len) > 1 ) {
-      if ( min(dl) < -1e-8 ) 
-        stop("Invalid input")
-      else if ( min(dl) < 0 ) {
-        j <- which(dl < 0)
-        len[j+1] <- len[j]
-        if ( any(diff(len) < 0) )
-          stop("STILL have invalid input")
-      }
-    }
+    ndat.hi <- length(pars$hi$lambda)
+    npad.hi <- nx.hi - ndat.hi
+    npad.lo <- nx.lo - length(pars$lo$lambda)
 
-    is.hi <- len < tc
-    is.lo <- !is.hi
-    ans <- vector("list", length(len))
-    
-    if ( any(is.hi) ) {
-      len.hi <- len[is.hi]
-      y <- c(rep(e0[i], ndat), rep(0, nx.hi - ndat))
-      for ( j in seq_along(len.hi) )
-        ans[is.hi][[j]] <- y <-
-          pde.hi(y, len.hi[j], pars$hi, 0)[,1]
-    }
-
-    if ( any(is.lo) ) {
-      len.lo <- len[is.lo]
-      y <- c(rep(e0[i], ndat), rep(0, nx.lo - ndat))
-      for ( j in seq_along(len.lo) )
-        ans[is.lo][[j]] <- y <-
-          pde.lo(y, len.lo[j], pars$lo, 0)[,1]
+    y <- matrix(rep(c(e0[i], 0), c(ndat.hi, npad.hi)), nx.hi, 1)
+    if ( len < tc ) {
+      ans <- pde.hi(y, len,    pars$hi, 0 )[[2]][,1]
+    } else {
+      y   <- pde.hi(y, tc,     pars$hi, 0 )[[2]][,1]
+      y   <- c(y[pars$tr], rep(0, npad.lo))
+      ans <- pde.lo(y, len-tc, pars$lo, tc)[[2]][,1]
     }
     ans
   }

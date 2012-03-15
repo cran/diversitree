@@ -14,22 +14,27 @@
 ##   8. branches
 ##   9. branches.unresolved
 
-## 1: make
-make.bd <- function(tree, times=NULL,
-                    sampling.f=NULL, unresolved=NULL) {
-  cache <- make.cache.bd(tree, times, sampling.f, unresolved)
-  ll <- function(pars, ...) ll.bd(cache, pars, ...)
-  class(ll) <- c("bd", "function")
-  ll
+## At some point there will be 
+make.bd <- function(tree, sampling.f=NULL, unresolved=NULL,
+                    times=NULL, control=list()) {
+  control <- check.control.bd(control, times)
+  if ( control$method == "nee" )
+    make.bd.nee(tree, sampling.f, unresolved, times)
+  else
+    make.bd.ode(tree, sampling.f, unresolved, control)
 }
 
-make.yule <- function(tree, times=NULL,
-                      sampling.f=NULL, unresolved=NULL) {
+## Yule is somewhat weird, as we allow likelihood calculations, but
+## cheat on the ML search and go straight for the ML point.
+make.yule <- function(tree, sampling.f=NULL, unresolved=NULL,
+                      times=NULL, control=list()) {
+  control <- check.control.bd(control)
   if ( !is.null(sampling.f) || !is.null(unresolved) )
     stop("Cannot yet do Yule model with unresolved clades or sampling.f")
-  cache <- make.cache.bd(tree, times, sampling.f, unresolved)
-  ll <- function(pars, ...)
-    ll.bd(cache, c(pars, 0), ...)
+  ll.bd <- make.bd(tree, sampling.f, unresolved, times, control)
+  ll <- function(pars, condition.surv=TRUE)
+    ll.bd(c(pars, 0), condition.surv)
+  
   class(ll) <- c("yule", "bd", "function")
   ll
 }
@@ -44,7 +49,6 @@ print.yule <- function(x, ...) {
   cat("Constant rate Yule model likelihood function:\n")
   print(unclass(x))
 }
-
 
 ## 3: argnames / argnames<-
 argnames.bd <- function(x, ...) {
@@ -83,8 +87,6 @@ find.mle.bd <- function(func, x.init, method,
   ## slightly less trivial than one would hope (need to get access to
   ## the cache, which might be hidden by a constraint...
   if ( missing(x.init) ) {
-    ## tmp <- find.mle.yule(func, ...)
-    ## x.init <- structure(c(tmp$par, 0), names=argnames(func))
     warning("Guessing initial parameters - may do badly")
     x.init <- structure(c(.2, .1), names=argnames(func))
   }
@@ -92,18 +94,14 @@ find.mle.bd <- function(func, x.init, method,
     method <- if (inherits(func, "bd.split")) "subplex" else "nlm"
   find.mle.default(func, x.init, method, fail.value,
                    class.append="fit.mle.bd", ...)
-  ## NextMethod("find.mle", x.init=x.init, method=method,
-  ##           class.append="fit.mle.bd")
 }
 
 find.mle.yule <- function(func, x.init, method, fail.value=NA,
                           ...) {
-  ## TODO: I think this will fail after constraining, which should not
-  ## be done.
-  ## TODO: This is only true for certain cases (no funny business with
-  ## sampling.f/unresolved - this might require moving to
-  ## numeric solutions?)
-  cache <- environment(func)$cache
+  cache <- environment(environment(func)$ll.bd)$cache
+
+  ## This analytic solution is only correct when the tree is fully
+  ## resolved.  This is enforced by the make.yule function.
   condition.surv <- list(...)$condition.surv
   if ( is.null(condition.surv) )
     condition.surv <- TRUE
@@ -111,130 +109,19 @@ find.mle.yule <- function(func, x.init, method, fail.value=NA,
   n.node <- if ( condition.surv ) cache$n.node - 1 else cache$n.node
   lambda <- n.node / cache$tot.len
   obj <- list(par=c(lambda=lambda),
-              lnLik=func(lambda, ...),
+              lnLik=func(lambda, condition.surv),
               counts=NA,
               code=0,
               gradient=NA,
               method="analytic")
-  class(obj) <- c("fit.mle.yule", "fit.mle")
+
+  ## This class here is needed so that this can be compared against a
+  ## BD fit.
+  class(obj) <- c("fit.mle.bd", "fit.mle")
   obj
 }
 
 mcmc.bd <- mcmc.lowerzero
-
-## 5: make.cache
-make.cache.bd <- function(tree=NULL, times=NULL,
-                          sampling.f=NULL, unresolved=NULL) {
-  if ( !is.null(times) && !is.null(tree) ) {
-    stop("times cannot be specified if tree given")
-  } else if ( is.null(times) && is.null(tree) ) {
-    stop("Either times or tree must be specified")
-  } else if ( is.null(times) ) {
-    tree <- check.tree(tree)
-    times <- as.numeric(sort(branching.times(tree), decreasing=TRUE))
-  } else {
-    times <- as.numeric(sort(times, decreasing=TRUE))
-  }
-
-  if ( inherits(tree, "clade.tree") ) {
-    if ( !is.null(unresolved) )
-      stop("'unresolved' cannot be specified where 'tree' is a clade.tree")
-    unresolved <- make.unresolved.bd(tree$clades)
-  }
-
-  if ( !is.null(sampling.f) && !is.null(unresolved) )
-    stop("Cannot specify both sampling.f and unresolved")
-  else
-    sampling.f <- check.sampling.f(sampling.f, 1)
-
-  if ( !is.null(unresolved) && length(unresolved) > 0 ) {
-    if ( is.null(names(unresolved)) || !is.numeric(unresolved) )
-      stop("'unresolved' must be a named numeric vector")
-    if ( !(all(names(unresolved) %in% tree$tip.label)) )
-      stop("Unknown species in 'unresolved'")
-    if ( any(unresolved < 1) )
-      stop("All unresolved entries must be > 0")
-
-    if ( any(unresolved == 1) ) {
-      warning("Removing unresolved entries that are one")
-      unresolved <- unresolved[unresolved != 1]
-    }
-
-    if ( length(unresolved) == 0 )
-      unresolved <- NULL
-    else {
-      i <- match(names(unresolved), tree$tip.label)
-      unresolved <- list(n=unresolved,
-                         t=tree$edge.length[match(i, tree$edge[,2])])
-    }
-  } else {
-    unresolved <- NULL
-  }
-
-  x <- c(NA, times)
-  N <- length(x)
-
-  if ( is.null(tree) ) {
-    tot.len <- sum(diff(times[1] - c(times, 0)) *
-                   2:(length(times) + 1))
-    n.node <- length(times)
-  } else {
-    tot.len <- sum(tree$edge.length)
-    n.node <- tree$Nnode
-  }
-
-  list(N=N, x=x, f=sampling.f, unresolved=unresolved, tot.len=tot.len,
-       n.node=n.node)
-}
-
-## TODO: Has argument checking been lost here?
-## This allows r < 0, a > 1.  a < 0 is not allowed though
-## Also, if r < 0, then a must > 1 (and vv.).  XOR captures this.
-##   if ( a < 0 || sign(1-a) != sign(r) ) return(-Inf)
-## Alternatively, just enforce all(pars > 0)?
-ll.bd <- function(cache, pars, prior=NULL, condition.surv=TRUE) {
-  if ( !is.null(prior) )
-    stop("'prior' argument to likelihood function no longer accepted")
-
-  N <- cache$N
-  x <- cache$x
-  f <- cache$f
-  unresolved <- cache$unresolved
-
-  if ( length(pars) != 2 )
-    stop("Incorrect number of parameters")
-  if ( pars[2] == pars[1] )
-    pars[1] <- pars[1] + 1e-12
-
-  r <- pars[1] - pars[2]
-  a <- pars[2] / pars[1]
-
-  if ( pars[1] <= 0 || pars[2] < 0 )
-    return(-Inf)
-
-  if ( f < 1 )
-    loglik <- lfactorial(N - 1) +
-      (N - 2) * log(f*abs(r)) + N * log(abs(1 - a)) +
-        r * sum(x[3:N]) -
-          2*sum(log(abs(f * exp(r * x[2:N]) - a + 1 - f)))
-  else # this may not be faster enough to warrant keeping.
-    loglik <- lfactorial(N - 1) +
-      (N - 2) * log(abs(r)) + N * log(abs(1 - a)) + r * sum(x[3:N]) -
-        2*sum(log(abs(exp(r * x[2:N]) - a)))
-
-  if ( !condition.surv )
-    loglik <- loglik +
-      log(f * f * r * (1 - a)) -
-        2*log(abs(exp(-r * x[2])*(a - 1 + f) - f))
-
-  if ( !is.null(unresolved) ) {
-    ert <- exp(r * unresolved$t)
-    loglik <- loglik +
-      sum((unresolved$n-1) * (log(abs(ert - 1)) - log(abs(ert - a))))
-  }
-
-  loglik
-}
 
 starting.point.bd <- function(tree, yule=FALSE) {
   pars.yule <- c(coef(find.mle(make.yule(tree))), 0)
@@ -244,4 +131,18 @@ starting.point.bd <- function(tree, yule=FALSE) {
     p <- coef(find.mle(make.bd(tree), pars.yule, method="subplex"))
   names(p) <- c("lambda", "mu")
   p
+}
+
+check.control.bd <- function(control, times) {
+  control <- modifyList(list(method="nee"), control)
+  if ( !(control$method %in% c("nee", "ode")) )
+    stop(sprintf("Unknown method '%s'", control$method))
+  control
+}
+
+check.pars.bd <- function(pars) {
+  if ( length(pars) != 2 )
+    stop("Invalid parameter length (expected 2)")
+  if ( any(!is.finite(pars)) || any(pars < 0) )
+    stop("Parameters must be non-negative and finite")
 }

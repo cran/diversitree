@@ -6,14 +6,26 @@ sigmoid2.x <- function(x, y0, y1, xmid, r)
 constant.x <- function(x, c) rep(c, length(x))
 noroptimal.x <- function(x, y0, y1, xmid, s2)
   y0 + (y1-y0)*exp(-(x - xmid)^2/(2 * s2))
-make.linear.x <- function(x0, x1)
-  function(x, c, m) {
-    x[x < x0] <- x0
-    x[x > x1] <- x1
-    ans <- m * x + c
-    ans[ans < 0] <- 0
-    ans
+make.linear.x <- function(x0, x1) {
+  if ( is.null(x1) ) {
+    function(x, c, m) {
+      x1 <- length(x) - x0 + 1
+      x[seq_len(x0)]  <- x[x0]
+      x[x1:length(x)] <- x[x1]
+      ans <- m * x + c
+      ans[ans < 0] <- 0
+      ans
+    }
+  } else {
+    function(x, c, m) {
+      x[x < x0] <- x0
+      x[x > x1] <- x1
+      ans <- m * x + c
+      ans[ans < 0] <- 0
+      ans
+    }
   }
+}
 stepf.x <- function(x, y0, y1, xmid)
   ifelse(x < xmid, y0, y1)
 
@@ -22,7 +34,7 @@ normalise <- function(x) x / sum(x)
 starting.point.quasse <- function(tree, states, states.sd=NULL)
   c(starting.point.bd(tree),
     diffusion=as.numeric(coef(find.mle(make.bm(tree, states,
-      meserr=states.sd), .1))))
+      states.sd), .1))))
 
 load.wisdom <- function(file="wisdom") {
   w <- paste(readLines(file), collapse="\n")
@@ -57,7 +69,8 @@ check.states.quasse <- function(tree, states, states.sd) {
 check.control.quasse <- function(control, tree, states) {
   tree.length <- max(branching.times(tree))
   xr <- diff(range(states))
-  xr.mult <- 5 # make modifiable?
+  xr.mult <- if ( "xr.mult" %in% names(control) )
+    control$xr.mult else 5
   defaults <- list(tc=tree.length/10,
                    dt.max=tree.length/1000,
                    nx=1024,
@@ -69,7 +82,8 @@ check.control.quasse <- function(control, tree, states) {
                    tips.combined=FALSE,
                    flags=FFTW.MEASURE, # fftC only
                    atol=1e-6, # mol only
-                   rtol=1e-6, # nol only
+                   rtol=1e-6, # mol only
+                   eps=1e-6,  # perhaps scale with dx?
                    verbose=FALSE)
 
   nx.changed <- "nx" %in% names(control)
@@ -131,9 +145,6 @@ expand.pars.quasse <- function(lambda, mu, args, ext, pars) {
   pars.use
 }
 
-## TODO: Once a non-FFT backend is working, this will require some
-## tweaking.  Possibly it is enough to avoid the calculation of
-## padding altogether? 
 quasse.extent <- function(control, drift, diffusion) {
   nx <- control$nx
   dx <- control$dx
@@ -149,10 +160,10 @@ quasse.extent <- function(control, drift, diffusion) {
     mean <- drift * dt
     sd   <- sqrt(diffusion * dt)
 
-  ## Another option here is to compute all the possible x values and
+    ## Another option here is to compute all the possible x values and
     ## then just drop the ones that are uninteresting?
-    nkl <- ceiling(-(mean - w * sd)/dx) * c(r, 1)
-    nkr <- ceiling( (mean + w * sd)/dx) * c(r, 1)
+    nkl <- max(ceiling(-(mean - w * sd)/dx)) * c(r, 1)
+    nkr <- max(ceiling( (mean + w * sd)/dx)) * c(r, 1)
     ndat <- nx*c(r, 1) - (nkl + 1 + nkr)
 
     padding <- cbind(nkl, nkr)
@@ -164,11 +175,11 @@ quasse.extent <- function(control, drift, diffusion) {
 
   ## Concatenate the x values, so that the lambda(x), mu(x)
   ## calculations work for both spaces simultaneously.
-  x <- list(seq(x0.1, length=ndat[1], by=dx/r),
-            seq(x0.2, length=ndat[2], by=dx))
+  x <- list(seq(x0.1, length.out=ndat[1], by=dx/r),
+            seq(x0.2, length.out=ndat[2], by=dx))
 
-  tr <- seq(r, length=ndat[2], by=r)
+  tr <- seq(r, length.out=ndat[2], by=r)
 
-  list(x=x, padding=padding, ndat=ndat, tr=tr)
+  list(x=x, padding=padding, ndat=ndat, tr=tr, nx=c(nx*r, nx))
 }
 

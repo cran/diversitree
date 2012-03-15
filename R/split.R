@@ -1,12 +1,13 @@
-## TODO: document this!
-## much of this file is to split functions what diversitree-branches.R
-## is to the core models; code for generating caches, and then runing
-## integrations given those caches are provided.
-
-## Checking that is specific to splitting:
+## Check that the splits are OK.
 check.split <- function(phy, nodes, split.t) {
-  if ( length(split.t) != length(nodes) )
+  if ( length(split.t) == 1 && length(nodes) > 1 ) {
+    if ( split.t == 0 || split.t == Inf )
+      split.t <- rep(split.t, length(nodes))
+    else
+      stop("If split.t is length 1, it must be '0' or 'Inf'")
+  } else if ( length(split.t) != length(nodes) ) {
     stop("'nodes' and 'split.t' must be the same length")
+  }
     
   ## Check that all nodes are ok
   n.tip <- length(phy$tip.label)
@@ -16,110 +17,37 @@ check.split <- function(phy, nodes, split.t) {
     stop("Invalid node specification")
   
   ## Check that split times are OK
-  t0 <- branching.times(phy)[nodes - n.tip]
-  t1 <- t0 + phy$edge.length[match(nodes, phy$edge[,2])]
-  split.t[split.t == 0] <- t0[split.t == 0]
-  split.t[split.t == Inf] <- t1[split.t == Inf]
-  if ( any(split.t < t0 | split.t > t1) )
-    stop("Invalid split time")
+  partial <- !(split.t == Inf | split.t == 0)
+  if ( any(partial) )
+    stop("Partial split times not yet allowed")
 
-  list(nodes=c(NA, nodes), split.t=c(Inf, split.t))
+  list(nodes=c(NA, nodes),
+       split.with.edge=c(NA, split.t == Inf))
 }
 
-## This uses the split generic: x is a phylogeny, f is a vector of
-## nodes to split at, drop is ignored (there only for compatibility),
-## and split.t is a vector along 'f' with the time that the split
-## occurs at.
-split.phylo <- function(x, f, drop=FALSE, split.t, ...) {
-  tmp <- check.split(x, f, split.t)
+## Determine the group membership of every edge.
+## Augment the usual cache vector with some extra information:
+make.cache.split <- function(phy, cache, nodes, split.t) {
+  tmp <- split.group(phy, nodes, split.t)
+  nodes <- tmp$node
 
-  phy <- x
+  cache$nodes <- tmp$nodes
+  cache$group.nodes <- tmp$group.nodes
+  cache$group.branches <- tmp$group.branches
+  cache$split.with.edge <- tmp$split.with.edge
+
+  cache$n.part <- length(nodes)
+  cache$aux.use <- rep(FALSE, length(cache$group.branches))
+  cache$aux.use[nodes[-1]] <- TRUE
+
+  cache
+}
+
+split.group <- function(phy, nodes, split.t) {
+  tmp <- check.split(phy, nodes, split.t)
   nodes <- tmp$nodes
-  split.t <- tmp$split.t
-  
+  split.with.edge <- tmp$split.with.edge
   n.tip <- length(phy$tip.label)
-  bt <- branching.times(phy)
-  tt <- structure(rep(0, n.tip), names=phy$tip.label) # tip times
-
-  ## group <- make.split.phylo.vec(phy, nodes[-1])
-  group <- make.split.phylo.vec(phy, nodes)
-
-  ## Find the *parent* of the different groups, so that we can
-  ## establish an order to work in:
-  parent.node <- phy$edge[match(nodes, phy$edge[,2]),1]
-  parent.group <- group[match(parent.node, phy$edge[,2])]
-
-  ## This is a hack:
-  ## Because the root node does not terminate in an edge in the tree,
-  ## this needs catching.  There may be a clearer way of doing this.
-  ## The root node is always group 1.  I hope.
-  if ( length(i <- which(parent.node == n.tip + 1)) > 0 )
-    parent.group[i] <- 1
-
-  ## 'extra.tips' is the index for the tips that represent daughter
-  ## groups, the index being against 'phy' (it will change in the sub
-  ## sub phylogeny)
-  extra.tips <- c(NA, sapply(nodes[-1], function(x)
-                             min(descendants(x, phy$edge))))
-  names(extra.tips) <- phy$tip.label[extra.tips]
-
-  split1 <- function(idx) {
-    i <- phy$edge[group == idx,2]
-    daughters <- which(parent.group == idx)
-
-    to.keep <- c(extra.tips[daughters], i[i <= n.tip])
-    to.drop <- seq_len(n.tip)[-to.keep]
-    phy2 <- drop.tip.fixed(phy, to.drop)
-    phy2$bt <- bt[phy2$node.label]
-    phy2$tt <- tt[phy2$tip.label]
-
-    phy2$parent <- parent.group[idx]
-    
-    if ( length(daughters) > 0 ) {
-      ## Trim the dummy branches
-      spp <- names(extra.tips[daughters])
-      j <- match(match(spp, phy2$tip.label), phy2$edge[,2])
-      len <- phy2$edge.length[j] - split.t[daughters]
-
-      ## TODO: Another hack (this should only be negative by
-      ## rounding error, when zero is really what is required).
-      if ( any(len < 0) ) {
-        if ( any(abs(len) > 1e-6) )
-          stop("Illegal negative branch length")
-        len[len < 0] <- 0
-      }
-
-      ## TODO: Another hack.  Some *very* short values of len can
-      ## cause the integrator to fail (my guess is when this is
-      ## divided apart by the underlying code).  This will just
-      ## truncate these, as they probably should be zero anyway.
-      if ( any(len < 1e-10) )
-        len[len < 1e-10] <- 0
-      phy2$edge.length[j] <- len
-      
-      names(daughters) <- names(extra.tips[daughters])
-      phy2$tt[spp] <- split.t[daughters]
-      phy2$daughters <- daughters[order(split.t[daughters])]
-      phy2$anc <- ancestors(phy2, match(names(daughters), phy2$tip.label))
-    }
-
-    if ( !is.na(nodes[idx]) )
-      ## Calculate how much additional space needs computing at the end of
-      ## the base node.
-      phy2$trailing <- split.t[idx] - bt[nodes[idx] - n.tip]
-
-    phy2
-  }
-
-  lapply(seq_along(nodes), split1)
-}
-
-## Generate a grouping vector from a phylogeny.  This takes a vector
-## 'nodes', and classifies the tree into different groups.
-make.split.phylo.vec <- function(phy, nodes, group=NULL) {
-  if ( is.character(nodes) )
-    nodes <- match(nodes, phy$node.label) + length(phy$tip.label)
-
   edge <- phy$edge
 
   descendants.idx <- function(node)
@@ -134,10 +62,7 @@ make.split.phylo.vec <- function(phy, nodes, group=NULL) {
     list(group=group, base=base)
   }
 
-  if ( is.null(group) )
-    group <- rep(1, nrow(edge))
-  else if ( length(group) != nrow(edge) )
-    stop("Invalid length grouping vector")
+  group <- rep(1, nrow(edge))
 
   base <- integer(length(nodes))
   for ( i in seq_along(nodes) ) {
@@ -146,168 +71,263 @@ make.split.phylo.vec <- function(phy, nodes, group=NULL) {
     base[i] <- tmp$base
   }
 
-  attr(group, "base") <- base
-  group
+  group <- group[match(seq_len(max(edge)), edge[,2])]
+  group[n.tip + 1] <- 1
+
+  group.branches <- group
+  i <- which(!split.with.edge)
+  if ( length(i) > 0 )
+    group.branches[which(i)] <- base[which(i)]
+
+  list(nodes=c(n.tip+1, nodes[-1]),
+       group.nodes=group, group.branches=group.branches,
+       split.with.edge=split.with.edge)
 }
 
-## This is slightly dodgy, but appears to work.
-dt.split.order <- function(daughters, parents) {
-  pending <- rep(TRUE, length(daughters))
-  order <- integer(0)
-  
-  while ( any(pending) ) {
-    i <- which(pending & sapply(daughters, length) == 0)
-    j <- parents[i]
-    order <- c(order, i)
-    daughters[j] <- lapply(daughters[j], setdiff, i)
-    pending[i] <- FALSE
-  }
+make.branches.split <- function(cache, branches, branches.aux) {
+  group <- cache$group.branches
+  split.with.edge <- cache$split.with.edge
+  aux.use <- cache$aux.use
+  aux.i <- cache$aux.i
 
-  order
-}
+  branches.c     <- make.caching.branches(cache, branches)
+  branches.aux.c <- make.caching.branches.aux(cache, branches.aux)
 
-all.branches.split <- function(pars, cache, initial.conditions, branches,
-                               branches.aux) {
-  n.part <- cache$n.part
-  res <- vector("list", n.part)
+  function(y, len, pars, t0, idx) {
+    g <- group[idx]
 
-  aux.i <- cache$aux.i # 1, 2 (E0, E1) for BiSSE
+    if ( length(len) == 1 ) {
+      ## cat(sprintf("%d: %d, len=%2.5f, t0=%2.5f\n", idx, g, len, t0))
+      ## 1: This might be an internal edge, so it is possible that
+      ## there are auxilliary variables that need computing.
+      ## (this could also be a terminal edge where there is only a
+      ## single group)
+      p <- pars[[g]]
 
-  for ( i in cache$order.parts ) {
-    x <- cache$cache[[i]]
+      if ( !aux.use[idx] ) {
+        ## Normal case: just run the branch
+        branches.c(y, len, p, t0, idx)
+      } else if ( split.with.edge[g] ) {
+        ## This is a join.  In this one here, the edge also has the
+        ## derived character state:
+        ans <- branches.c(y, len, p, t0, idx)
 
-    if ( length(x$daughters) > 0 ) {
-      ## Add the daughters
-      y <- res[x$daughters]
-      preset <- list(target=x$daughters.i,
-                     base=vector("list", length(x$daughters)),
-                     lq=numeric(length(x$daughters)))
-      
-      aux <- branches.aux(i, x$depth[x$daughters.i], pars[[i]])
-      if ( is.matrix(aux) )
-        aux <- matrix.to.list(aux)
-      
-      for ( j in seq_along(x$daughters) ) {
-        yj <- res[[x$daughters[j]]]$base
-        yj[aux.i] <- aux[[j]]
-        idx <- x$daughters.i[j]
+        g.parent <- group[cache$parent[idx]]
+        aux <- branches.aux.c(g.parent, t0+len, pars[[g.parent]], idx)
+        if ( is.list(ans) )
+          ans[[2]][aux.i] <- aux
+        else
+          ans[-1][aux.i] <- aux
 
-        tmp <- branches(yj, x$len[idx], pars[[i]], x$depth[idx])
-        preset$lq[j] <- tmp[1]
-        preset$base[[j]] <- tmp[-1]
-      }
-
-      if ( is.null(x$preset) ) {
-        x$preset <- preset
+        ans # return
       } else {
-        x$preset$target <- c(x$preset$target, preset$target)
-        x$preset$lq     <- c(x$preset$lq,     preset$lq)
-        x$preset$base   <- c(x$preset$base,   preset$base)
+        ## Also a join, but now the edge is in the ancestral character
+        ## state:
+        y[aux.i] <- branches.aux.c(g, t0, p, idx)
+        branches.c(y, len, p, t0, idx)
+      }
+    } else if ( length(unique(g)) == 1 ) {
+      ## 2: This must be a set of tips, but it is only of one type, so
+      ## let's do it simply.
+      branches.c(y, len, pars[[g[1]]], t0, idx)
+    } else {
+      ## 3: This is a set of tips that have more than one group type
+      ## in it, so loop over the different group types.
+      grp <- sort.default(unique.default(group[idx]))
+      i <- split.default(seq_along(idx), group[idx])
+
+      if ( is.null(cache$vars.in.list) ) {
+        lq <- numeric(length(len))
+        ans <- matrix(NA, cache$ny, length(len))
+
+        for ( g.i in seq_along(grp) ) {
+          j <- i[[g.i]]
+          tmp <- branches.c(y, len[i[[g.i]]], pars[[grp[g.i]]], t0, idx[j])
+          lq[j] <- tmp[[1]]
+          ans[,j] <- tmp[[2]]
+        }
+        list(lq, ans)
+      } else {
+        ans <- vector("list", length(len))
+        for ( g.i in seq_along(grp) ) {
+          j <- i[[g]]
+          ans[j] <- branches.c(y, len[i[[g]]], pars[[grp[g]]], t0, idx[j])
+        }
+        ans
       }
     }
+  }
+}
 
-    ## Run the traversal.
-    obj <- all.branches(pars[[i]], x, initial.conditions, branches)
+make.initial.conditions.split <- function(cache, initial.conditions) {
+  group <- cache$group.nodes
+  function(init, pars, t, idx)
+    initial.conditions(init, pars[[group[idx]]], t, idx)
+}
 
-    ## Trailing branch:
-    base <- obj$init[[x$root]]
-    if ( !is.na(cache$parent[i]) ) { # trailing to deal with...
-      tmp <- branches(base, x$trailing.len, pars[[i]], x$trailing.t0)
-      res[[i]] <- list(lq=tmp[1] + sum(obj$lq),
-                       base=tmp[-1],
-                       intermediates=obj)
-    } else {
-      res[[i]] <- list(lq=sum(obj$lq),
-                       base=base,
-                       intermediates=obj)
+ll.xxsse.split <- function(pars, cache, initial.conditions,
+                           branches, condition.surv, root, root.p,
+                           intermediates) {
+  ## always pars[[1]], but being safe...
+  pars.root <- pars[[cache$group.nodes[cache$root]]]
+
+  if ( cache$control$caching.branches )
+    caching.branches.set.pars(pars, branches)
+
+  ans <- all.branches.matrix(pars, cache, initial.conditions, branches)
+  vals <- ans$init[,cache$root]
+  root.p <- root.p.xxsse(vals, pars.root, root, root.p)
+  loglik <- root.xxsse(vals, pars.root, ans$lq, condition.surv, root.p)
+
+  if ( intermediates ) {
+    ans$root.p <- root.p
+    attr(loglik, "intermediates") <- ans
+    attr(loglik, "vals") <- vals
+  }
+
+  loglik  
+}
+
+make.initial.tip.xxsse.split <- function(cache) {
+  k <- cache$k
+  n.part <- cache$n.part
+  grp <- cache$group.branches  
+  idx.D <- (k+1):(2*k)
+
+  out <- vector("list", length(cache$y))
+  for ( i in seq_along(cache$y)) {
+    y.i <- cache$y[[i]]
+    out[[i]] <- vector("list", n.part)
+    
+    for ( group in seq_len(n.part) ) {
+      keep <- grp[y.i$target] == group
+      if ( any(keep) ) {
+        s.f <- cache$sampling.f[[group]]
+        out[[i]][[group]] <- 
+          list(y     = c(1-s.f, s.f * y.i$y[idx.D]),
+               y.i   = y.i$y.i,
+               target= y.i$target[keep],
+               t     = y.i$t[keep])
+      }
     }
   }
+  unlist(out, FALSE)
+}
+
+## The first of these that I'll do is fully passive.  It checks to
+## see if the parameters and input are identical.  This should be
+## the most basic, and most foolproof.  It may not be the fastest
+## though, as some of these checks add overhead.  The use of
+## identical should keep things fairly fast though.
+
+## TODO: We only really need to bother checking the variables for
+## cases where the group has a descendent.
+
+## A caching all.branches:
+all.branches.caching <- function(pars, cache, initial.conditions,
+                                 branches, branches.aux,
+                                 type="matrix") {
+  if ( type == "matrix" )
+    res <- all.branches.matrix(pars, cache, initial.conditions, branches)
+  else
+    res <- all.branches.list(pars, cache, initial.conditions, branches)
+
+  ## Now, update the environment of the branches and branches.aux
+  ## functions with the parameters used and the results:
+  e <- 
+  e.aux <- environment(branches.aux)
+
+  environment(branches)$prev.pars <-
+    environment(branches.aux)$prev.pars <- pars
 
   res
 }
 
-make.cache.split <- function(tree, nodes, split.t) {
-  if ( length(split.t) == 1 && length(nodes) > 1 ) {
-    if ( split.t == 0 || split.t == Inf )
-      split.t <- rep(split.t, length(nodes))
-    else
-      stop("If split.t is length 1, it must be '0' or 'Inf'")
-  }
+
+## I want to make caching versions of the branches function.
+caching.branches.set.pars <- function(p, branches, branches.aux) {
+  e <- environment(branches)
+  e.b <- environment(e$branches.c)
+  e.a <- environment(e$branches.aux.c)
+
+  e.a$pars.same <- e.b$pars.same <- i <-
+    mapply(identical, p, e.b$prev.pars)
+  e.a$prev.pars <- e.b$prev.pars <- p
+
+  i
+}
+
+make.caching.branches <- function(cache, branches) {
+  if ( !cache$control$caching.branches )
+    return(branches)
+
+  cat("Using experimental caching branches!\n")
   
-  ## TODO: This has the poor effect of not working correctly to create
-  ## single branch partitions.  I should be careful about that.  This
-  ## is also quite slow, so that making split functions is not very quick.
-  subtrees <- split.phylo(tree, nodes, split.t=split.t)
+  n <- length(cache$len)
+  n.part <- cache$n.part
+  group <- cache$group.branches
 
-  n.part <- length(subtrees)
-
-  cache <- list()
-  cache$cache <- vector("list", n.part)
-  cache$tip.tr <- structure(rep(NA, length(tree$tip.label)),
-                            names=tree$tip.label)
-  cache$parents <- integer(n.part)
-  cache$daughters <- vector("list", n.part)
-
-  for ( i in seq_len(n.part) ) {
-    tree.sub <- subtrees[[i]]
-
-    res <- make.cache(tree.sub)
-    res$tips <- seq_len(res$n.tip)
-    res$tip.label <- tree.sub$tip.label
-        res$trailing.len <- tree.sub$trailing
-    res$trailing.t0 <- max(res$depth)
-    res$daughters <- tree.sub$daughters
-    n <- length(res$daughters)
-
-    if ( n > 0 ) {
-      res$daughters.i <- match(names(res$daughters), tree.sub$tip.label)
-      res$n.tip <- res$n.tip - n
-      res$tips <- res$tips[-res$daughters.i]
-      res$tip.label <- res$tip.label[-res$daughters.i]
-
-      ## TODO: This is a hack: an "offset" argument passed in to
-      ## make.cache might be nicer.
-      ## If the sub tree is entirely internal (i.e. none of its nodes
-      ## connect out to the present), then the depth and height
-      ## attributes are incorrect.
-      ## Note that this does not fix the height case...
-      bt <- tree.sub$bt
-      dt <- res$depth[names(bt)] - bt
-
-      if ( diff(range(dt)) > 1e-8 )
-        stop("I am confused...")
-      else if ( abs(dt[1]) > 1e-8 ) # worth updating the depths?
-        res$depth <- (res$depth - dt[1])
-
-      ## This was old code for when recycling was being used.
-      ## if ( !is.null(tree.sub$anc) ) {
-      ##   res$recycle.order <-
-      ##     apply(tree.sub$anc, 2, `%in%`, x=res$order)
-      ##   nd <- res$order[rowSums(res$recycle.order) > 0]
-      ##   res$recycle.keep <- sort(as.integer(res$children[nd,]))
-      ## }
+  pars.same <- logical(n.part)
+  prev.pars <- vector("list", n.part)
+  prev.lq <- numeric(n)
+  
+  if ( is.null(cache$vars.in.list) ) {
+    prev.vars <- prev.base <- matrix(NA, cache$ny, n)
+    branches.caching <- function(y, len, p, t0, idx) {
+      g <- group[idx[1]]
+      if ( pars.same[g] && identical(prev.vars[,idx[1]], y) ) {
+        list(prev.lq[idx],
+             prev.base[,idx,drop=FALSE])
+      } else {
+        prev.vars[,idx] <<- y
+        ret <- branches(y, len, p, t0, idx)
+        prev.lq[idx]    <<- ret[[1]]
+        prev.base[,idx] <<- ret[[2]]
+        ret
+      }
     }
-
-    cache$cache[[i]] <- res
-    
-    cache$parents[i] <- tree.sub$parent
-    cache$daughters[i] <- list(res$daughters)
-    cache$tip.tr[tree.sub$tip.label[res$tips]] <- i
+  } else { # Just QuaSSE, really.
+    prev.vars <- prev.base <- vector("list", n)
+    branches.caching <- function(y, len, p, t0, idx) {
+      g <- group[idx[1]]
+      if ( length(idx) > 1 ) # Will take some work, but not used atm.
+        stop("vector idx not yet allowed")
+      if ( pars.same[g] && identical(prev.vars[[idx]], y) ) {
+        c(prev.lq[idx],
+          prev.base[[idx]])
+      } else {
+        prev.vars[[idx]] <<- y
+        ret <- branches(y, len, p, t0, idx)
+        prev.lq[idx]   <<- ret[1]
+        prev.base[[idx]] <<- ret[-1]
+        ret
+      }
+    }
   }
 
-  cache$n.parts <- length(subtrees)
-  cache$order.parts <- dt.split.order(cache$daughters, cache$parents)
+  branches.caching
+}
 
-  cache$desc.parts <- vector("list", n.part)
-  for ( i in cache$order.parts ) {
-    j <- cache$daughters[[i]]
-    cache$desc.parts[i] <- list(c(unlist(cache$desc.parts[j]), j))
-  }
-
-  ## Old recycle code:
-  ## cache$prev <- new.env()
-  ## cache$prev$res <- lapply(seq_len(n.part), function(...)
-  ##                          make.stack(n.recycle))
+## Note that for now, the returned function here includes an
+## additional argument to the input function:
+##   normal aux: (g, t, p)
+##   returned:   (g, t, p, idx)
+make.caching.branches.aux <- function(cache, branches.aux) {
+  if ( !cache$control$caching.branches )
+    return(function(g, t, p, idx) branches.aux(g, t, p))
   
-  cache
+  n <- length(cache$len)
+  prev.aux <- vector("list", n)
+  pars.same <- logical(cache$n.part)
+
+  branches.aux.caching <- function(g, t, p, idx) {
+    if ( pars.same[g] ) {
+      prev.aux[[idx]]
+    } else {
+      prev.aux[[idx]] <<- ret <- branches.aux(g, t, p)
+      ret
+    }
+  }
+
+  branches.aux.caching
 }

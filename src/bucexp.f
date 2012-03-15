@@ -1,37 +1,13 @@
-*     A tidied version of the bucexp code, since it is getting a bit
-*     ridiculous at the moment.
-
-*     Generally, These are the functions to use.  Where possible, they
-*     step incrementally through a series of times.  Sometimes it is not
+*     These are the functions to use.  Where possible, they step
+*     incrementally through a series of times.  Sometimes it is not
 *     possible to do this without getting into a tangle, in which case
 *     they drop down and use the more basic approach of computing the
 *     exponential for each clade (see below).
 *       BUCEXP - return complete state matrix
 *       BUCEXPL - return likelihoods for a series of clades
 *
-*     These functions are here mostly for testing; for each unique time
-*     they compute the entire exponential.  These are much more robust
-*     to errors.  The functions are analogous to BUCEXP and BUCEXPL,
-*     taking identical arguments and retuning identical results to
-*     rouding error.
-*       BUCEXPSAFE
-*       BUCEXPSAFEL
-*
-*     These ones are really old testing functions;
-*       BUCEXP1
-*       BUCEXP1L
-*     they don't include the scal argument.
-*
 *     This won't need to be used directly:
 *       BLDMAT: construct infinitesimal rate matrix
-
-*     It might be nice if I can leverage a single mapping from the
-*     output of a raw function (BUCEXP, BUCEXPG) to a likelihood one
-*     (BUCEXPL, BUCEXPGL), but I don't want to keep around a huge pile
-*     of extra results unnecessarily.  However, the intermediate
-*     exponentiation *requires* that the entire matrix is returned, even
-*     if we are only interested in a few elements.  Not having the
-*     ability to call back makes it difficult to see a way around this.
 
 *     The complete state space subroutines compute the likelihood vector
 *     for all of state space over a series of times.  Results stored in
@@ -60,7 +36,7 @@
 *     clades that originate from that node.
 *
 *     Parameters:
-*       nt, mua, mub, laa, lab, qba, t, lt: as for BUCEXP
+*       nt, la0, la1, mu0, mu1, q01, t, lt: as for BUCEXP
 *       ti (int[lc]): vector of indices to 't'; the jth clade has time
 *         t[ti[j]].  Conversely, the ith element of t is the time that
 *         all clades, j, where ti[j] == i originate from.
@@ -68,7 +44,7 @@
 *         Nc[i] species)
 *       nsc (int[lc]): The number of species where the state is known
 *         (0 < nsc[i] <= Nc[i])
-*       k (int[lc]): The number of species known to be in state b
+*       k (int[lc]): The number of species known to be in state 1
 *         (0 <= k[i] <= nsc[i])
 *       ans (double[4*lc]): Likelihoods, in four groups of lc elements:
 *         1: Likelihood of generating clade, starting from state 0
@@ -82,13 +58,13 @@
 *     the likelihood is just one of the numbers in the probability
 *     matrix.
 
-***   Raw state space (BUCEXP/BUCEXPSAFE)
-      subroutine BUCEXP(nt, mua, mub, laa, lab, qba, qab, t, lt, scal,
+***   Raw state space (BUCEXP)
+      subroutine BUCEXP(nt, la0, la1, mu0, mu1, q01, q10, t, lt, scal,
      .     tol, m, w, iflag)
       implicit none
 
       integer nt, lt
-      double precision mua, mub, laa, lab, qba, qab, t(lt), scal, w(*)
+      double precision la0, la1, mu0, mu1, q01, q10, t(lt), scal, w(*)
 
       double precision infnorm
 
@@ -107,7 +83,7 @@
       n  = nt*(nt + 1)/2 + 1
       nz = (7*nt*nt - 7*nt + 2)/2
 
-      call BLDMAT(nt, mua, mub, laa, lab, qba, qab, ia, ja, a)
+      call BLDMAT(nt, la0, la1, mu0, mu1, q01, q10, ia, ja, a)
 
       anorm = infnorm(ia, ja, a, n, nz, wsp, lwsp)
 
@@ -122,7 +98,6 @@
      .        anorm, ia, ja, a, nz, wsp,lwsp, iwsp,liwsp, itrace,
      .        iflag, scal)
          if ( iflag .lt. 0 ) then
-*            print*,'[BUCEXP] WARNING: switching to manual calculation'
 *     The trick here would be to return the number of successful
 *     times done and just restart from there, but that's not a very
 *     large optimization for the number of times this is used (I counted
@@ -133,7 +108,6 @@
      .              anorm,ia, ja, a, nz, wsp,lwsp, iwsp,liwsp, itrace,
      .              iflag, scal)
                if ( iflag .lt. 0 ) then
-*                  print*,'[BUCEXP] WARNING: calculation failed'
                   return
                endif
             enddo
@@ -147,115 +121,14 @@
 
       end
 
-      subroutine BUCEXPSAFE(nt, mua, mub, laa, lab, qba, qab, t, lt,
-     .     scal, tol, m, w, iflag)
-      implicit none
-
-      integer nt, lt
-      double precision mua, mub, laa, lab, qba, qab, t(lt), scal, w(*)
-
-      double precision infnorm
-
-      integer nmax, nzmax, mmax
-      parameter( nmax=20101, nzmax=139301, mmax=30 )
-      integer lwsp, liwsp
-      parameter( lwsp = nmax*(mmax+2)+5*(mmax+2)**2+7, liwsp = nmax )
-
-      integer d, i, n, nz, m, itrace, iflag
-      integer ia(nzmax), ja(nzmax), iwsp(liwsp)
-      double precision tol, anorm, v(nmax), wsp(lwsp), a(nzmax)
-
-      itrace = 0
-      iflag = 0
-
-      n  = nt*(nt + 1)/2 + 1
-      nz = (7*nt*nt - 7*nt + 2)/2
-
-      call BLDMAT(nt, mua, mub, laa, lab, qba, qab, ia, ja, a)
-
-      anorm = infnorm(ia, ja, a, n, nz, wsp, lwsp)
-
-      v(1) = 0.0d0
-      v(2) = scal
-      do i = 3,n
-         v(i) = 0.0d0
-      enddo
-
-      do d=0,1
-         do i=1,lt
-            call DSEXPV( n, m, t(i), v, w((lt*d + i-1)*n+1), tol,
-     .           anorm,ia, ja, a, nz, wsp,lwsp, iwsp,liwsp, itrace,
-     .           iflag, scal)
-            if ( iflag .lt. 0 ) then
-*               print*,'[BUCEXPSAFE] WARNING: calculation failed'
-               return
-            endif
-         enddo
-
-         if ( d .eq. 0 ) then
-            v(2) = 0.0d0
-            v(3) = scal
-         endif
-      enddo
-
-      end
-
-      subroutine BUCEXP1(nt, mua, mub, laa, lab, qba, qab, t, lt, tol,
-     .     m, w, iflag)
-      implicit none
-
-      integer nt, lt
-      double precision mua, mub, laa, lab, qba, qab, t(lt), w(*)
-
-      double precision infnorm
-
-      integer nmax, nzmax, mmax
-      parameter( nmax=20101, nzmax=139301, mmax=30 )
-      integer lwsp, liwsp
-      parameter( lwsp = nmax*(mmax+2)+5*(mmax+2)**2+7, liwsp = nmax )
-
-      integer d, i, n, nz, m, itrace, iflag
-      integer ia(nzmax), ja(nzmax), iwsp(liwsp)
-      double precision tol, anorm, v(nmax), wsp(lwsp), a(nzmax)
-
-      itrace = 0
-      iflag = 0
-      n  = nt*(nt + 1)/2 + 1
-      nz = (7*nt*nt - 7*nt + 2)/2
-
-      call BLDMAT(nt, mua, mub, laa, lab, qba, qab, ia, ja, a)
-      anorm = infnorm(ia, ja, a, n, nz, wsp, lwsp)
-
-      v(1) = 0.0d0
-      v(2) = 1.0d0
-      do i = 3,n
-         v(i) = 0.0d0
-      enddo
-
-      do d=0,1
-         do i=1,lt
-            call DMEXPV( n, m, t(i), v, w((lt*d + i-1)*n+1), tol, anorm,
-     .           ia, ja, a, nz, wsp,lwsp, iwsp,liwsp, itrace, iflag)
-            if ( iflag .lt. 0 ) then
-*               print*,'[BUCEXP1] WARNING: calculation failed'
-               return
-            endif
-         enddo
-         if ( d .eq. 0 ) then
-            v(2) = 0.0d0
-            v(3) = 1.0d0
-         endif
-      enddo
-      end
-
 ***   Likelihood functions
-      subroutine BUCEXPL(nt, mua, mub, laa, lab, qba, qab, t, lt,
+      subroutine BUCEXPL(nt, la0, la1, mu0, mu1, q01, q10, t, lt,
      .     ti, Nc, nsc, k, lc, scal, tol, m, ans, iflag)
       implicit none
 
       integer nt, lt, lc, m, iflag
       integer ti(lc), Nc(lc), nsc(lc), k(lc)
-      double precision mua, mub, laa, lab, qba, qab, t(lt), scal,
+      double precision la0, la1, mu0, mu1, q01, q10, t(lt), scal,
      .     tol, ans(4*lc)
 
       double precision bucexplik
@@ -266,13 +139,9 @@
       iflag = 0
       n = nt*(nt + 1)/2 + 1
 
-*     TODO: This is O(lt x lc), when it should be possible to do this in
-*     O((lt+lc) * log(lt + lc)) (using an order()-style approach).
-*     However, it's probably not that much of a time sink :)
-      call BUCEXP(nt, mua, mub, laa, lab, qba, qab, t, lt, scal, tol,
+      call BUCEXP(nt, la0, la1, mu0, mu1, q01, q10, t, lt, scal, tol,
      .     m, w, iflag)
       if ( iflag .lt. 0 ) then
-         print*,'[BUCEXPL] catching failure'
          return
       endif
 
@@ -289,141 +158,6 @@
          enddo
       enddo
 
-      end
-
-      subroutine BUCEXPSAFEL(nt, mua, mub, laa, lab, qba, qab, t, lt,
-     .     ti, Nc, nsc, k, lc, scal, tol, m, ans, iflag)
-      implicit none
-
-      integer nt, lt, lc, m, iflag
-      integer ti(lc), Nc(lc), nsc(lc), k(lc)
-      double precision mua, mub, laa, lab, qba, qab, t(lt), scal,
-     .     tol, ans(4*lc)
-
-      double precision bucexplik
-
-      integer n, d, i, j
-      double precision w( 2 * lt * (nt*(nt + 1)/2 + 1) )
-
-      iflag = 0
-      n = nt*(nt + 1)/2 + 1
-
-      call BUCEXPSAFE(nt, mua, mub, laa, lab, qba, qab, t, lt, scal,
-     .     tol, m, w, iflag)
-      if ( iflag .lt. 0 ) then
-         print*,'[BUCEXPSAFE] catching failure'
-         return
-      endif
-      do d = 0,1
-         do i=1,lt
-            do j=1,lc
-               if ( ti(j) .eq. i ) then
-                  ans(d*lc + j) =
-     .                 bucexplik(Nc(j), nsc(j), k(j), 
-     .                 w((lt*d + i-1)*n+1))
-                  ans((2+d)*lc + j) = w((lt*d + i-1)*n+1)
-               endif
-            enddo
-         enddo
-      enddo
-
-      end
-
-      subroutine BUCEXP1L(nt, mua, mub, laa, lab, qba, qab, t, lt,
-     .     ti, Nc, nsc, k, lc, tol, m, ans, iflag)
-      implicit none
-
-      integer nt, lt, lc, m, iflag
-      integer ti(lc), Nc(lc), nsc(lc), k(lc)
-      double precision mua, mub, laa, lab, qba, qab, t(lt), tol,
-     .     ans(4*lc)
-
-      double precision bucexplik
-
-      integer n, d, i, j
-      double precision w( 2 * lt * (nt*(nt + 1)/2 + 1) )
-
-      iflag = 0
-      n  = nt*(nt + 1)/2 + 1
-
-      call BUCEXP1(nt, mua, mub, laa, lab, qba, qab, t, lt, tol, m, w, 
-     .     iflag)
-      if ( iflag .lt. 0 ) then
-         print*,'[BUCEXP1L] catching failure'
-         return
-      endif
-      do d = 0,1
-         do i=1,lt
-            do j=1,lc
-               if ( ti(j) .eq. i ) then
-                  ans(d*lc + j) =
-     .                 bucexplik(Nc(j), nsc(j), k(j), 
-     .                 w((lt*d + i-1)*n+1))
-                  ans((2+d)*lc + j) = w((lt*d + i-1)*n+1)
-               endif
-            enddo
-         enddo
-      enddo
-
-      end
-
-*     This should replace the inner loop so that we have
-*      subroutine BUCEXP1L(nt, mua, mub, laa, lab, qba, qab, t, lt,
-*     .     ti, Nc, nsc, k, lc, tol, m, ans)
-*      implicit none
-*
-*      integer nt, lt, lc, m
-*      integer ti(lc), Nc(lc), nsc(lc), k(lc)
-*      double precision mua, mub, laa, lab, qba, qab, t(lt), tol,
-*     .     ans(4*lc)
-*
-*      integer n
-*      double precision w( 2 * lt * (nt*(nt + 1)/2 + 1) )
-*
-*      n  = nt*(nt + 1)/2 + 1
-*      call BUCEXP1(nt, mua, mub, laa, lab, qba, qab, t, lt, tol, m, w)
-*      call BUXEXPLIKELIHOODS(lt, ti, Nc, nsc, k, lc, w, n, ans)
-*      end
-      subroutine BUCEXPLIKELIHOODS(lt, ti, Nc, nsc, k, lc, w, n, ans)
-      implicit none
-
-      integer lt, lc, n
-      integer ti(lc), Nc(lc), nsc(lc), k(lc)
-      double precision w(2*lt*n), ans(4*lc)
-
-      double precision bucexplik
-      integer d, i, j
-
-      do d = 0,1
-         do i=1,lt
-            do j=1,lc
-               if ( ti(j) .eq. i ) then
-                  ans(d*lc + j) =
-     .                 bucexplik(Nc(j), nsc(j), k(j), 
-     .                 w((lt*d + i-1)*n+1))
-                  ans((2+d)*lc + j) = w((lt*d + i-1)*n+1)
-               endif
-            enddo
-         enddo
-      enddo
-      
-      end
-
-***   Other
-*     This is a historic function that is useful in debugging at the
-*     Java end (since it is easy to make this return the same number as
-*     the integrator does).
-      subroutine BUCEXPONE(nt, mua, mub, laa, lab, qba, qab, t, Nc, nsc,
-     .     k, tol, m, ans, iflag)
-
-      implicit none
-      integer nt
-      integer Nc(1), nsc(1), k(1), m, iflag
-      double precision mua, mub, laa, lab, qba, qab, t(1), tol, ans(4)
-      iflag = 0
-*     the '1's are, in turn, lt, ti, [other args], lc
-      call BUCEXP1L(nt, mua, mub, laa, lab, qba, qab, t, 1, 1,
-     .     Nc, nsc, k, 1, tol, m, ans, iflag)
       end
 
 ***     Helper functions and subroutines:
@@ -432,10 +166,13 @@
       implicit none
       integer nzmax
       integer n, nz, lwsp
-      parameter( nzmax = 3000 )
+      parameter( nzmax = 139301 )
       integer ia(nzmax), ja(nzmax)
       double precision a(nzmax), wsp(lwsp)
       integer i
+
+*     Purely to avoid compiler warning:
+      i = ja(1)
 
       do i = 1,n
          wsp(i) = 0.0d0
@@ -456,7 +193,7 @@
 *     We need to know:
 *       N:  The number of species in the clade
 *       ns: The number of species of known state (0 < ns <= N)
-*       k:  The number of species known to be in state 'b' 
+*       k:  The number of species known to be in state '1' 
 *           (0 <= k <= ns)
 *       w:  The probability/state vector produced by bucexp()
       double precision function bucexplik(N, ns, k, w)
@@ -497,23 +234,24 @@
 
 *     Rate matrix
 *       nt: the number of species at which we absorb.
-*       mua/b: extinction rates in state a and b
-*       laa/b: speciation rates in state a and b
-*       qba/qab: Character transition rates from a->b and b->a
+*       la0/1: speciation rates in state 0 and 1
+*       mu0/1: extinction rates in state 0 and 1
+*       q01/q10: Character transition rates from 0->1 and 1->0
 *       t: time at which solution is needed
 
+*     WARNING: comment here looks out of date...
 *     Speciation: Speciation to the current position is possible for
-*     species in state a if there are more than one species (at least
-*     two) currently in state a (if there is one species in state a,
+*     species in state 0 if there are more than one species (at least
+*     two) currently in state 0 (if there is one species in state 0,
 *     then speciation cannot account for this one species - instead, it
 *     must have arisen from extinction or character state change).
-*     Species in state 'b' are considered before state 'a', since that
+*     Species in state '1' are considered before state '0', since that
 *     keeps the column indices in order.
 *
-*     Character state transition.  Transition from a->b is possible
-*     wherever 'b' in this generation has at least one species,
-*     irrespective of the number in state 'a'.  "Nothing" always happens
-*     at rate na*pa + nb*pb
+*     Character state transition.  Transition from 0->1 is possible
+*     wherever '0' in this generation has at least one species,
+*     irrespective of the number in state '1'.  "Nothing" always happens
+*     at rate n0*p0 + n1*p1
 *
 *     Extinction
 *
@@ -521,30 +259,30 @@
 *
 *     The last speciation row is dealt with separately, since this is
 *     transition into the "too many species" absorbing state
-      subroutine BLDMAT(nt, mua, mub, laa, lab, qba, qab, ia, ja, a)
+      subroutine BLDMAT(nt, la0, la1, mu0, mu1, q01, q10, ia, ja, a)
       implicit none
       
       integer nt
-      double precision mua, mub, laa, lab, qba, qab
+      double precision la0, la1, mu0, mu1, q01, q10
       
-      integer n, nz, idx, i, na, nb, ns, nzmax
+      integer n, nz, idx, i, n0, n1, ns, nzmax
       parameter( nzmax = 3000 )
       integer ia(nzmax), ja(nzmax)
       double precision a(nzmax)
-      double precision pa, pb
+      double precision p0, p1
       
       n = nt*(nt + 1)/2 + 1
       nz = (7*nt*nt - 7*nt + 2)/2
 
-      na = 1
-      nb = 0
+      n0 = 1
+      n1 = 0
       ns = 1
 
-      pa = -(mua + laa + qba)
-      pb = -(mub + lab + qab)
+      p0 = -(mu0 + la0 + q01)
+      p1 = -(mu1 + la1 + q10)
 
-      a(1) = mua
-      a(2) = mub
+      a(1) = mu0
+      a(2) = mu1
       ia(1) = 1
       ia(2) = 1
       ja(1) = 2
@@ -553,33 +291,33 @@
       idx = 3
 
       DO i = 2,(n-1)
-         IF ( nb .gt. 1 ) THEN
-            a(idx) = (nb - 1) * lab
+         IF ( n1 .gt. 1 ) THEN
+            a(idx) = (n1 - 1) * la1
             ia(idx) = i
-            ja(idx) = ns*(ns - 1)/2 + nb
+            ja(idx) = ns*(ns - 1)/2 + n1
             idx = idx + 1
          ENDIF
-         IF ( na .gt. 1 ) THEN
-            a(idx) = (na - 1) * laa
+         IF ( n0 .gt. 1 ) THEN
+            a(idx) = (n0 - 1) * la0
             ia(idx) = i
-            ja(idx) = ns*(ns - 1)/2 + nb + 1
+            ja(idx) = ns*(ns - 1)/2 + n1 + 1
             idx = idx + 1
          ENDIF
 
-         IF ( nb .gt. 0 ) THEN
-            a(idx) = (na + 1) * qba
+         IF ( n1 .gt. 0 ) THEN
+            a(idx) = (n0 + 1) * q01
             ia(idx) = i
             ja(idx) = i - 1
             idx = idx + 1
          ENDIF
 
-         a(idx) = na * pa + nb * pb
+         a(idx) = n0 * p0 + n1 * p1
          ia(idx) = i
          ja(idx) = i
          idx = idx + 1
 
-         IF ( na .gt. 0 ) THEN
-            a(idx) = (nb + 1) * qab
+         IF ( n0 .gt. 0 ) THEN
+            a(idx) = (n1 + 1) * q10
             ia(idx) = i
             ja(idx) = i + 1
             idx = idx + 1
@@ -588,35 +326,35 @@
 *     TODO: It is wasteful to compute (ns+1)(ns+2)/2 every time here
 *     See above for similar cases, too [ns(ns-1)]
          IF ( ns < (nt - 1) ) THEN
-            a(idx) = (na + 1) * mua
+            a(idx) = (n0 + 1) * mu0
             ia(idx) = i
-            ja(idx) = (ns + 1)*(ns + 2)/2 + nb + 1
+            ja(idx) = (ns + 1)*(ns + 2)/2 + n1 + 1
             idx = idx + 1
 
-            a(idx) = (nb + 1) * mub
+            a(idx) = (n1 + 1) * mu1
             ia(idx) = i
-            ja(idx) = (ns + 1)*(ns + 2)/2 + nb + 2
+            ja(idx) = (ns + 1)*(ns + 2)/2 + n1 + 2
             idx = idx + 1
          ENDIF
 
-         IF ( na .gt. 0 ) THEN
-            na = na - 1
-            nb = nb + 1
+         IF ( n0 .gt. 0 ) THEN
+            n0 = n0 - 1
+            n1 = n1 + 1
          ELSE
             ns = ns + 1
-            na = ns
-            nb = 0
+            n0 = ns
+            n1 = 0
          ENDIF
       ENDDO
 
-      na = nt - 1
-      nb = 0
+      n0 = nt - 1
+      n1 = 0
       DO i = (n - nt),(n - 1)
-         a(idx) = na * laa + nb * lab
+         a(idx) = n0 * la0 + n1 * la1
          ia(idx) = n
          ja(idx) = i
          idx = idx + 1
-         na = na - 1
-         nb = nb + 1
+         n0 = n0 - 1
+         n1 = n1 + 1
       ENDDO
       end

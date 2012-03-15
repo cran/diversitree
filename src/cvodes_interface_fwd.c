@@ -2,6 +2,7 @@
 #include <R.h>
 #include <Rinternals.h>
 
+#include "config.h"
 #ifdef WITH_CVODES
 
 /* Sundials Header Files */

@@ -197,6 +197,9 @@
  */
 
 #include <stdio.h>
+
+#define NO_FPRINTF_OUTPUT
+
 #include <stdlib.h>
 #include <stdarg.h>
 
@@ -669,7 +672,7 @@ void *CVodeCreate(int lmm, int iter)
   cv_mem->cv_e_data     = NULL;
   cv_mem->cv_ehfun      = cvErrHandler;
   cv_mem->cv_eh_data    = cv_mem;
-  cv_mem->cv_errfp      = stderr;
+  cv_mem->cv_errfp      = NULL; /* RGF: Was stderr, removed for compile */
   cv_mem->cv_qmax       = maxord;
   cv_mem->cv_mxstep     = MXSTEP_DEFAULT;
   cv_mem->cv_mxhnil     = MXHNIL_DEFAULT;
@@ -8946,7 +8949,9 @@ void cvProcessError(CVodeMem cv_mem,
 
 #ifndef NO_FPRINTF_OUTPUT
     fprintf(stderr, "\n[%s ERROR]  %s\n  ", module, fname);
-    fprintf(stderr, msg);
+    /* This change to CVODES sources needed to compile on
+       security-hardened gcc versions */
+    fprintf(stderr, "%s", msg);
     fprintf(stderr, "\n\n");
 #endif
 
