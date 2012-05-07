@@ -17,7 +17,8 @@ starting.point.bisse(tree, q.div=5, yule=FALSE)
 }
 
 \arguments{
-  \item{tree}{A phylogenetic tree, in \code{ape} \dQuote{phylo} format.}
+  \item{tree}{An ultrametric bifurcating phylogenetic tree, in
+    \code{ape} \dQuote{phylo} format.}
   
   \item{states}{A vector of character states, each of which must be 0 or
     1, or \code{NA} if the state is unknown.  This vector must have
@@ -237,9 +238,7 @@ samples <- mcmc(lik, fit$par, nsteps=1000, prior=prior, w=w,
 ## profiles.
 col <- c("blue", "red")
 profiles.plot(samples[c("lambda0", "lambda1")], col.line=col, las=1,
-              xlab="Speciation rate",
-              ylab="Posterior probability density")
-legend("topright", c("lambda0", "lambda1"), col=col, lty=1)
+              xlab="Speciation rate", legend="topright")
 }
 
 ## BiSSE reduces to the birth-death model and Mk2 when diversification

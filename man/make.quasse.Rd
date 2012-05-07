@@ -12,12 +12,13 @@
 
 \usage{
 make.quasse(tree, states, states.sd, lambda, mu, control,
-            sampling.f=NULL, defaults=NULL)
+            sampling.f=NULL)
 starting.point.quasse(tree, states, states.sd=NULL)
 }
 
 \arguments{
-  \item{tree}{A phylogenetic tree, in \code{ape} \dQuote{phylo} format.}
+  \item{tree}{An ultrametric bifurcating phylogenetic tree, in
+    \code{ape} \dQuote{phylo} format.}
   
   \item{states}{A vector of character states, each of which must be a
     numeric real values.  Missing values (\code{NA}) are not yet handled.
@@ -42,11 +43,6 @@ starting.point.quasse(tree, states, states.sd=NULL)
     species that are included in the phylogeny.  A value of \code{0.75}
     means that three quarters of extant species are included in the
     phylogeny.  By default all species are assumed to be known.}
-
-  \item{defaults}{A named list of values to alter the default arguments
-    of the returned likelihood function.  For example, passing
-    \code{defaults=list(root=ROOT.FLAT)} will change the treatment of
-    the root.}
 }
 
 \details{

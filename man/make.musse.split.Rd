@@ -12,7 +12,8 @@ make.musse.split(tree, states, k, nodes, split.t,
 }
 
 \arguments{
-  \item{tree}{A phylogenetic tree, in \code{ape} \dQuote{phylo} format.}
+  \item{tree}{An ultrametric bifurcating phylogenetic tree, in
+    \code{ape} \dQuote{phylo} format.}
   
   \item{states}{A vector of character states, each of which must be an
     integer between 1 and \code{k}.  This vector must have names that
@@ -53,7 +54,7 @@ the new option for MEDUSA).  If \code{0 < split.t < Inf} then we split
 at that time on the tree (zero is the present, with time growing
 backwards).
 
-TODO: Describe \code{nodes} and \code{split.t} here.
+% TODO: Describe \code{nodes} and \code{split.t} here.
 }
 
 \examples{

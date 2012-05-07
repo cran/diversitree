@@ -1,12 +1,16 @@
 ## Checking utilities.  These are things that happen over and over
 ## again, and are tedious to have to write into each function.
+
+## Only things that are not model specific should go in this file.  If
+## the function ends in .xxx where 'xxx' is the name of a model, it
+## probably belongs in model-xxx.R
 check.tree <- function(tree, ultrametric=TRUE, bifurcating=TRUE,
                        node.labels=FALSE) {
   if ( !inherits(tree, "phylo") )
     stop("'tree' must be a valid phylo tree")
   if ( ultrametric && !is.ultrametric(tree) )
     stop("'tree' must be ultrametric")
-  if ( any(tree$eddge.length < 0) )
+  if ( any(tree$edge.length < 0) )
     stop("Negative branch lengths in tree")
   ## ape's is.binary.tree() can let a few nasties through - for
   ## e.g. each tritomy, an unbranched node and this gets through.
@@ -29,7 +33,8 @@ check.tree <- function(tree, ultrametric=TRUE, bifurcating=TRUE,
 }
 
 check.states <- function(tree, states, allow.unnamed=FALSE,
-                         strict=FALSE, strict.vals=NULL) {
+                         strict=FALSE, strict.vals=NULL,
+                         as.integer=TRUE) {
   if ( is.matrix(states) ) {
     ## Multistate characters (experimental).  This will not work with
     ## clade trees, but they are only interesting for BiSSE, which has
@@ -77,6 +82,10 @@ check.states <- function(tree, states, allow.unnamed=FALSE,
   ## TODO: When multistate characters are present, this may fail even
   ## for cases where it should not.
   if ( !is.null(strict.vals) ) {
+    if ( isTRUE(all.equal(strict.vals, 0:1)) )
+      if ( is.logical(states) )
+        states[] <- as.integer(states)
+    
     if ( strict ) {
       if ( !isTRUE(all.equal(sort(strict.vals),
                              sort(unique(na.omit(states))))) )
@@ -86,9 +95,11 @@ check.states <- function(tree, states, allow.unnamed=FALSE,
     } else {
       extra <- setdiff(sort(unique(na.omit(states))), strict.vals)
       if ( length(extra) > 0 )
-        stop(sprintf("Unknown states %d not allowed in states vector",
+        stop(sprintf("Unknown states %s not allowed in states vector",
                      paste(extra, collapse=", ")))
     }
+    if ( as.integer && any(!is.na(states)) )
+      states <- check.integer(states)
   }
 
   if ( inherits(tree, "clade.tree") ) {
@@ -146,7 +157,7 @@ check.bounds <- function(lower, upper, x0=NULL) {
     stop("'upper' must be strictly greater than 'lower'")
 }
 
-check.par.multipart <- function(pars, n.part, n.per) {
+check.pars.multipart <- function(pars, n.part, n.per) {
   if ( is.matrix(pars) ) {
     if ( nrow(pars) != n.part )
       stop(sprintf("Expected %d parameter sets", n.part))
@@ -168,23 +179,25 @@ check.par.multipart <- function(pars, n.part, n.per) {
 
 ## Check that a number can reasonably be considered an integer.
 check.integer <- function(x) {
+  if ( is.null(x) )
+    stop("NULL argument for ", deparse(substitute(x)))
   nna <- !is.na(x)
-  if ( max(abs(x[nna] - round(x[nna]))) > 1e-8 )
+  if ( length(x) && max(abs(x[nna] - round(x[nna]))) > 1e-8 )
     stop("Non-integer argument for ", deparse(substitute(x)))
-  ## as.integer(x)
   storage.mode(x) <- "integer"
   x
 }
 
 check.scalar <- function(x) {
   if ( length(x) != 1 )
-    stop(deparse(substitute(x)), "must be a scalar")
+    stop(deparse(substitute(x)), " must be a scalar")
   x
 }
 
 check.control.ode <- function(control=list()) {
-  control <- modifyList(list(safe=FALSE, tol=1e-8, eps=0,
-                             backend="deSolve"), control)
+  defaults <- list(safe=FALSE, tol=1e-8, eps=0, backend="deSolve",
+                   unsafe=FALSE)
+  control <- modifyList(defaults, control)
 
   backends <- c("deSolve", "cvodes", "CVODES")
   if ( length(control$backend) != 1 )
@@ -210,88 +223,65 @@ check.control.ode <- function(control=list()) {
   control
 }
 
-check.pars.bisse <- function(pars) {
-  if ( length(pars) != 6 )
-    stop("Invalid parameter length (expected 6)")
-  if ( any(pars < 0) || any(!is.finite(pars)) )
-    stop("Parameters must be non-negative and finite")
-  TRUE
-}
-
-check.pars.musse <- function(pars, k) {
-  if ( length(pars) != k*(k + 1) )
-    stop(sprintf("Invalid length parameters (expected %d)",
-                 k*(k+1)))
-  if ( any(pars < 0) || any(!is.finite(pars)) )
-    stop("Parameters must be non-negative and finite")
-  TRUE
-}
-
-check.pars.bm <- function(pars) {
-  if ( length(pars) != 1 )
-    stop("Incorrect parameter length")
-  if ( pars[1] <= 0 )
-    stop("Diffusion must be positive")
-  TRUE
-}
-
-check.unresolved.bd <- function(tree, unresolved) {
-  ## This covers against
-  ##   tree=NULL, times=c(...)
-  ## with unresolved clades.
-  if ( is.null(tree) )
-    stop("Cannot just specify times when using unresolved clades")
-
-  if ( inherits(tree, "clade.tree") ) {
-    if ( !is.null(unresolved) )
-      stop("'unresolved' cannot be specified where 'tree' is a clade.tree")
-    unresolved <- make.unresolved.bd(tree$clades)
-  } else if ( !is.null(unresolved) && length(unresolved) > 0 ) {
-    if ( is.null(names(unresolved)) || !is.numeric(unresolved) )
-      stop("'unresolved' must be a named numeric vector")
-    if ( !(all(names(unresolved) %in% tree$tip.label)) )
-      stop("Unknown species in 'unresolved'")
-    if ( any(unresolved < 1) )
-      stop("All unresolved entries must be > 0")
-
-    if ( any(unresolved == 1) ) {
-      warning("Removing unresolved entries that are one")
-      unresolved <- unresolved[unresolved != 1]
-    }
-
-    if ( length(unresolved) == 0 )
-      unresolved <- NULL
-    else {
-      i <- match(names(unresolved), tree$tip.label)
-      unresolved <- list(n=unresolved,
-                         t=tree$edge.length[match(i, tree$edge[,2])])
-    }
-  } else {
-    unresolved <- NULL
+check.loaded.symbol <- function(symbol, dll="") {
+  if ( !is.loaded(symbol, dll) ) {
+    msg <- sprintf("Can't find C function %s", symbol)
+    if ( dll != "" )
+      sprintf("%s in shared library %s", msg, dll)
+    stop(msg)
   }
-  unresolved
+  TRUE
 }
 
-check.control.split <- function(control) {
-  if ( is.null(control$caching.branches) )
-    control$caching.branches <- FALSE
-  else {
-    val <- control$caching.branches
-    if ( !(length(val) == 1 && val %in% c(TRUE, FALSE)) )
-      stop("Invalid value for control$caching.branches")
+check.info.ode <- function(info, control=NULL) {
+  model <- if (is.null(info$name.ode)) info$name else info$name.ode
+  if ( !(is.character(model) && length(model) == 1) )
+    stop("'model' must be a single string")
+  info$name.ode <- model
+  info$ny    <- check.integer(check.scalar(info$ny))
+  info$np    <- check.integer(check.scalar(info$np))
+  info$idx.d <- check.integer(info$idx.d)
+  if ( is.null(info$dll) )
+    info$dll <- "diversitree"
+  else if ( !(is.character(info$dll) && length(info$dll)) == 1 )
+    stop("dll must be a single string")
+  dll <- info$dll
+
+  if ( !is.null(control) ) {
+    backend <- control$backend
+    if ( is.function(info$derivs) ) {
+      backend <- "R" # no effect.
+    } else if ( backend == "deSolve" ) {
+      check.loaded.symbol(sprintf("initmod_%s", model), dll)
+      check.loaded.symbol(sprintf("derivs_%s", model),  dll)
+    } else if ( backend == "cvodes" ) {
+      check.loaded.symbol(sprintf("derivs_%s_cvode", model), dll)
+    } else if ( backend == "CVODES" ) {
+      check.loaded.symbol(sprintf("derivs_%s_cvode", model),       dll)
+      check.loaded.symbol(sprintf("initial_conditions_%s", model), dll)
+    }
   }
-  control
+  
+  info
 }
 
-check.control.continuous <- function(control) {
-  defaults <- list(method="vcv")
-  control <- modifyList(control, defaults)
-  if ( length(control$method) != 1 )
-    stop("control$method must be a scalar")
-  methods <- c("vcv", "direct")
-  control$method <- pmatch(control$method, methods, nomatch=NA)
-  if ( is.na(control$method) )
-    stop(sprintf("control$method must be in %s",
-                 paste(methods, collapse=", ")))
-  control
+## For almost all models, there there must be a certain number of
+## finite non-negative parameters.
+check.pars.nonnegative <- function(pars, npar) {
+  if ( length(pars) != npar )
+    stop(sprintf("Incorrect parameter length: expected %d, got %d",
+                 npar, length(pars)))
+  if ( any(!is.finite(pars)) || any(pars < 0) )
+    stop("Parameters must be non-negative and finite")
+  pars
+}
+
+## Sometimes, it's useful just to check that the numbers look OK
+## though:
+check.nonnegative <- function(x, msg=NULL) {
+  if ( is.null(msg) )
+    msg <- "Parameters must be non-negative and finite"
+  if ( any(!is.finite(x)) || any(x < 0)  )
+    stop(msg)
+  x
 }

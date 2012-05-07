@@ -21,7 +21,8 @@ starting.point.bd(tree, yule=FALSE)
 }
 
 \arguments{
-  \item{tree}{A phylogenetic tree, in \code{ape} \dQuote{phylo} format.}
+  \item{tree}{An ultrametric bifurcating phylogenetic tree, in
+    \code{ape} \dQuote{phylo} format.}
   
   \item{times}{Vector of branching times, as returned by
     \code{branching.times}.  You don't need to use this unless you know
@@ -72,11 +73,12 @@ starting.point.bd(tree, yule=FALSE)
     al. 1994.
   }
 
-  The function \code{make.bd.ode} is included for completeness, but
-  should not be taken too seriously.  It uses an alternative ODE-based
-  approach, more similar to most diversitree models, to compute the
-  likelihood.  It exists so that other models that extend the
-  birth-death models may be tested.
+  The function "ode" method is included for completeness, but should not
+  be taken too seriously.  It uses an alternative ODE-based approach,
+  more similar to most diversitree models, to compute the likelihood.
+  It exists so that other models that extend the birth-death models may
+  be tested.
+
 }
 
 \seealso{
@@ -113,7 +115,7 @@ lik.yule <- make.yule(phy)
 lik.mu0 <- constrain(lik, mu ~ 0)
 
 ## The same to a reasonable tolerance:
-fit.yule <- find.mle(lik.yule)
+fit.yule <- find.mle(lik.yule, .1)
 fit.mu0 <- find.mle(lik.mu0, .1)
 all.equal(fit.yule[1:2], fit.mu0[1:2], tolerance=1e-6)
 
@@ -139,8 +141,7 @@ samples$r <- with(samples, lambda - mu)
 ## well with the estimated ones.
 col <- c("red", "blue", "green3")
 profiles.plot(samples[c("lambda", "mu", "r")], col.line=col, las=1,
-             ylab="Probability density", xlab="Parameter estimate")
-legend("topright", c("lambda", "mu", "r"), fill=col)
+              legend="topright")
 abline(v=0, lty=2)
 abline(v=c(.1, .03, .07), col=col)
 
@@ -152,11 +153,11 @@ lik2 <- make.bd(phy2, sampling.f=20/25)
 fit2 <- find.mle(lik2, c(.1, .03))
 
 ## The ODE based version gives comparable results.  However, it is
-## about 12x slower.
+## about 55x slower.
 lik.ode <- make.bd(phy, control=list(method="ode"))
 all.equal(lik.ode(coef(fit)), lik(coef(fit)), tolerance=2e-7)
 
-## The CVODES-based ODE version is about 4.5 slower
+## The CVODES-based ODE version is about 32 slower
 if ( check.cvodes(FALSE) ) {
   lik.ode <- make.bd(phy, control=list(method="ode", backend="CVODES"))
   all.equal(lik.ode(coef(fit)), lik(coef(fit)), tolerance=3e-7)
