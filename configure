@@ -1246,7 +1246,6 @@ if test -n "$ac_init_help"; then
 Optional Features:
   --disable-FEATURE       do not include FEATURE (same as --enable-FEATURE=no)
   --enable-FEATURE[=ARG]  include FEATURE [ARG=yes]
-  --enable-gcc-speedy     use agressive optimisation with gcc
   --enable-cvodes         enable the cvodes integrator
   --enable-gcc-strict     use strict gcc error checking
 
@@ -3434,19 +3433,6 @@ else
    PKG_LIBS="${PKG_LIBS} -lfftw3"
 fi
 
-# Check whether --enable-gcc-speedy was given.
-if test "${enable_gcc_speedy+set}" = set; then
-  enableval=$enable_gcc_speedy; gcc_speedy=$enableval
-fi
-
-if  test x"$gcc_speedy" = xyes ; then
-	PKG_CFLAGS="-O3 -ffast-math -funroll-all-loops -fomit-frame-pointer"
-	echo "Using fast options"
-else
-	PKG_CFLAGS=""
-	echo "Using default options"
-fi
-
 # Check whether --enable-cvodes was given.
 if test "${enable_cvodes+set}" = set; then
   enableval=$enable_cvodes; cvodes=$enableval
@@ -3465,7 +3451,6 @@ _ACEOF
 
 fi
 
-
 # Check whether --enable-gcc-strict was given.
 if test "${enable_gcc_strict+set}" = set; then
   enableval=$enable_gcc_strict; gcc_strict=$enableval
@@ -3473,10 +3458,7 @@ fi
 
 if  test x"$gcc_strict" = xyes ; then
    echo "Using strict C checking"
-   PKG_CFLAGS="-Wall -ansi -pedantic ${PKG_CFLAGS}"
-elif test "${GCC}" = yes; then
-   echo "Using strict C checking (GCC detected)"
-   PKG_CFLAGS="-Wall -ansi -pedantic ${PKG_CFLAGS}"
+   PKG_CFLAGS="-Wall -pedantic ${PKG_CFLAGS}"
 else
    echo "Using normal C checking"
 fi

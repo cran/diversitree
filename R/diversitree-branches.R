@@ -80,8 +80,9 @@
 ##   cache$depth[idx]
 ## but I need to be careful with this, as some depths will be
 ## 1e-15 and things like that.  This may not be a problem in reality.
+
 all.branches.matrix <- function(pars, cache, initial.conditions,
-                                branches) {
+                                branches, preset=NULL) {
   len <- cache$len
   depth <- cache$depth
   children <- cache$children
@@ -93,11 +94,14 @@ all.branches.matrix <- function(pars, cache, initial.conditions,
   n.tip <- cache$n.tip
 
   y <- cache$y
-  branch.init <- branch.base <- matrix(NA, cache$ny, n)
+  branch.init <- branch.base <- matrix(NA, cache$info$ny, n)
 
-  if ( !is.null(cache$preset) ) {
-    lq[cache$preset$target] <- cache$preset$lq
-    branch.base[,cache$preset$target] <- cache$preset$base
+  ## TODO: It might be an idea here to check preset is OK:
+  ## Must have names target, lq, base
+  ## must be of same length.
+  if ( !is.null(preset) ) {
+    lq[preset$target] <- preset$lq
+    branch.base[,preset$target] <- preset$base
   }
 
   if ( is.null(names(y)) ) { # dt.tips.grouped
@@ -139,11 +143,11 @@ all.branches.matrix <- function(pars, cache, initial.conditions,
   y.in <- initial.conditions(branch.base[,children[root,]], pars,
                              depth[root], root)
   branch.init[,root] <- y.in
-  list(init=branch.init, base=branch.base, lq=lq)
+  list(init=branch.init, base=branch.base, lq=lq, vals=y.in)
 }
 
 all.branches.list <- function(pars, cache, initial.conditions,
-                              branches) {
+                              branches, preset) {
   len <- cache$len
   depth <- cache$depth
   children <- cache$children
@@ -157,9 +161,9 @@ all.branches.list <- function(pars, cache, initial.conditions,
   y <- cache$y
   branch.init <- branch.base <- vector("list", n)
 
-  if ( !is.null(cache$preset) ) {
-    lq[cache$preset$target] <- cache$preset$lq
-    branch.base[cache$preset$target] <- cache$preset$base
+  if ( !is.null(preset) ) {
+    lq[preset$target] <- preset$lq
+    branch.base[preset$target] <- preset$base
   }
 
   if ( is.null(names(y)) ) { # dt.tips.grouped
@@ -198,7 +202,7 @@ all.branches.list <- function(pars, cache, initial.conditions,
   y.in <- initial.conditions(branch.base[children[root,]], pars,
                              depth[root], root)
   branch.init[[root]] <- y.in
-  list(init=branch.init, base=branch.base, lq=lq)
+  list(init=branch.init, base=branch.base, lq=lq, vals=y.in)
 }
 
 ## This is the minimal cache function, but not calculating initial
@@ -216,12 +220,7 @@ make.cache <- function(tree) {
 
   is.tip <- idx <= n.tip
 
-  children <- lapply(idx[!is.tip], function(x) edge[edge[,1] == x,2])
-  ## Technically, this is already checked by check.tree, but I'm happy
-  ## leaving it in.
-  if ( !all(sapply(children, length)==2) )
-    stop("Multifircations/unbranched nodes in tree - best get rid of them")
-  children <- rbind(matrix(NA, n.tip, 2), t(matrix(unlist(children), 2)))
+  children <- get.children(edge, n.tip)
 
   parent <- edge[match(idx, edge[,2]),1]
 
@@ -236,6 +235,12 @@ make.cache <- function(tree) {
   depth2 <- branching.depth(len, children, order, tips)
   i <- abs(depth - depth2) < 1e-8
   depth[i] <- depth2[i]
+
+  if ( is.ultrametric(tree) )
+    ## It is possible that an ultrametric tree will not quite have the
+    ## tips around zero.  This ensures it, which is is required for
+    ## dt.tips.grouped to work at present.
+    depth[tips] <- 0
 
   ## TODO: I don't need this ancestor thing for much - drop it here
   ## and move it to the asr code that actually uses it (this takes a
@@ -287,81 +292,37 @@ ROOT.GIVEN <- 4
 ROOT.BOTH  <- 5
 ROOT.MAX   <- 6
 ROOT.ALL   <- ROOT.BOTH
+root.p.calc <- function(vals, pars, root, root.p=NULL,
+                        root.equi=NULL) {
+  if ( !is.null(root.p) && root != ROOT.GIVEN )
+    warning("Ignoring specified root state")
 
-root.p.xxsse <- function(vals, pars, root, root.p=NULL) {
-  k <- length(vals) / 2
-  d.root <- vals[(k+1):(2*k)]
+  k <- length(vals)
 
   if ( root == ROOT.FLAT ) {
     p <- 1/k
   } else if ( root == ROOT.EQUI ) {
-    if ( k == 2 ) {
-      ## TODO: This is a bit of an ugliness now that other models have
-      ## stationary frequencies (bisseness, geosse, classe).
-      p <- stationary.freq.bisse(pars)
-      p <- c(p, 1-p)
-    } else {
-      stop("ROOT.EQUI only implemented for BiSSE")
-    }
+    if ( is.null(root.equi) )
+      stop("Equilibrium root probability not possible with this method")
+    p <- root.equi(pars)
   } else if ( root == ROOT.OBS ) {
-    p <- d.root / sum(d.root)
+    p <- vals / sum(vals)
   } else if ( root == ROOT.GIVEN ) {
-    if ( length(root.p) != length(d.root) )
+    if ( length(root.p) != length(vals) )
       stop("Invalid length for root.p")
     p <- root.p
   } else if ( root == ROOT.ALL ) {
-    p <- NULL
+    ## This hasn't actually worked for a little while...
+    .Deprecated("root=ROOT.ALL")
   } else {
     stop("Invalid root mode")
   }
   p
 }
 
-root.xxsse <- function(vals, pars, lq, condition.surv, root.p) {
-  logcomp <- sum(lq)
-  is.root.both <- is.null(root.p)
-
-  k <- length(vals) / 2
-  i <- seq_len(k)
-  lambda <- pars[i]
-  e.root <- vals[i]
-  d.root <- vals[-i]
-
-  if ( condition.surv ) {
-    if ( is.root.both )
-      d.root <- d.root / (lambda * (1-e.root)^2)
-    else
-      d.root <- d.root / sum(root.p * lambda * (1 - e.root)^2)
-  }
-
-  if ( is.root.both ) # ROOT.BOTH
-    loglik <- log(d.root) + logcomp
-  else
-    loglik <- log(sum(root.p * d.root)) + logcomp
-  loglik
-}
-
-## Which leads to an all singing, all dancing function:
-ll.xxsse <- function(pars, cache, initial.conditions,
-                     branches, condition.surv, root, root.p,
-                     intermediates) {
-  ans <- all.branches.matrix(pars, cache, initial.conditions, branches)
-  vals <- ans$init[,cache$root]
-  root.p <- root.p.xxsse(vals, pars, root, root.p)
-  loglik <- root.xxsse(vals, pars, ans$lq, condition.surv, root.p)
-
-  if ( intermediates ) {
-    ans$root.p <- root.p
-    attr(loglik, "intermediates") <- ans
-    attr(loglik, "vals") <- vals
-  }
-
-  loglik
-}
-
 ## Convert a branches function into one that adds log-compensation.
 ## This is not compulsary to use, but should make life easier.
-make.branches <- function(branches, comp.idx, eps=0) {
+make.branches.comp <- function(branches, comp.idx, eps=0) {
   if ( length(comp.idx) > 0 )
     function(y, len, pars, t0, idx) {
       ret <- branches(y, len, pars, t0, idx)
@@ -393,36 +354,47 @@ make.branches <- function(branches, comp.idx, eps=0) {
            branches(y, len, pars, t0, idx))
 }
 
-make.ode.branches <- function(model, dll, neq, np, comp.idx, control) {
-  backend <- control$backend
-  safe <- control$safe
-  tol <- control$tol
-  eps <- control$eps
-
-  if ( backend == "deSolve" ) {
-    initfunc <- sprintf("initmod_%s", model)
-    derivs <- sprintf("derivs_%s", model)
-
-    RTOL <- ATOL <- tol
-    ode <- make.ode(derivs, dll, initfunc, neq, safe)
-    branches <- function(y, len, pars, t0, idx)
-      ode(y, c(t0, t0+len), pars, rtol=RTOL, atol=ATOL)[-1,-1,drop=FALSE]
-  } else if ( backend == "cvodes" ) {
-    derivs <- sprintf("derivs_%s_cvode", model)
-
-    RTOL <- ATOL <- tol
-    ode <- cvodes(neq, np, derivs, RTOL, ATOL, dll)
-    branches <- function(y, len, pars, t0, idx)
-      ode(pars, y, c(t0, t0+len))[,-1,drop=FALSE]
-  } else {
+make.ode <- function(info, control) {
+  backend  <- control$backend
+  if ( is.function(info$derivs) )
+    ode <- make.ode.R(info, control)
+  else if ( backend == "deSolve" )
+    ode <- make.ode.deSolve(info, control)
+  else if ( backend == "cvodes" )
+    ode <- make.ode.cvodes(info, control)
+  else
     stop("Invalid backend", backend)
-  }
+  ode
+}
 
-  make.branches(branches, comp.idx, eps)
+make.branches.dtlik <- function(info, control) {
+  info     <- check.info.ode(info, control)
+  comp.idx <- info$idx.d
+  eps      <- control$eps
+  ode      <- make.ode(info, control)
+  branches <- function(y, len, pars, t0, idx)
+    ode(y, c(t0, t0+len), pars)
+  make.branches.comp(branches, comp.idx, eps)  
+}
+
+make.all.branches.dtlik <- function(cache, control,
+                                    initial.conditions) {
+  control <- check.control.ode(control)
+  if ( control$backend == "CVODES" ) {
+    make.all.branches.C(cache, control)
+  } else { # deSolve and cvodes:
+    branches <- make.branches.dtlik(cache$info, control)
+    function(pars, intermediates, preset=NULL)
+      all.branches.matrix(pars, cache, initial.conditions,
+                          branches, preset)
+  }
 }
 
 ## Utility functions for organising initial conditions.
-dt.tips.grouped <- function(y, y.i, tips, t) {
+dt.tips.grouped <- function(y, y.i, cache) {
+  tips <- cache$tips
+  t <- cache$len[tips]
+  
   if ( !is.list(y) )
     stop("'y' must be a list of initial conditions")
   if ( max(y.i) > length(y) || min(y.i) < 1 )
@@ -432,6 +404,17 @@ dt.tips.grouped <- function(y, y.i, tips, t) {
   if ( length(y.i) != length(t) )
     stop("y must be the same length as t")
 
+  if ( any(is.na(y.i)) ) {
+    k <- cache$info$k
+    if ( !is.null(k) && !is.na(k) && length(y) == k + 1 )
+      y.i[is.na(y.i)] <- k + 1
+    else
+      stop("Unhandled NA values in state vector")
+  }
+
+  if ( max(abs(cache$depth[tips])) > .Machine$double.eps^0.5 )
+    stop("This currently only works for ultrametric trees")
+
   types <- sort(unique(y.i))
   res <- vector("list", length(types))
 
@@ -439,7 +422,8 @@ dt.tips.grouped <- function(y, y.i, tips, t) {
     j <- which(y.i == type)
     i <- order(t[j])
     res[[type]] <- list(y=y[[type]], y.i=type,
-                        target=tips[j][i], t=t[j][i])
+                        target=tips[j][i], t=t[j][i],
+                        type="GROUPED")
   }
   res
 }
@@ -468,3 +452,41 @@ dt.tips.ordered <- function(y, tips, t) {
   }
 }
 
+## By the time this hits, unresolved clades and any other non-standard
+## tips have been removed.  We have an index "tips" (equal to 1:n.tip
+## for plain bisse) that is the "index" (in phy$edge numbering) of the
+## tips, and a state vector cache$states, both of the same length.
+## The length of the terminal branches is cache$len[cache$tips].
+##
+## Allowing for unknown state tips, there are three possible states
+##   (0, 1, NA -> 1, 2, 3)
+## Initial conditions at the tips are given by their tip states:
+## There are three types of initial condition in bisse:
+##             E0     E1     D0   D1
+##   state0: c(1-f_0, 1-f_1, f_0, 0  )
+##   state1: c(1-f_0, 1-f_1, 0,   f_1)
+##   state?: c(1-f_0, 1-f_1, f_0, f_1)
+initial.tip.xxsse <- function(cache, base.zero=FALSE) {
+  k <- cache$info$k
+  f <- cache$sampling.f
+
+  y <- matrix(rep(c(1-f, rep(0, k)), k + 1), k+1, 2*k, TRUE)
+  y[k+1,(k+1):(2*k)] <- diag(y[1:k,(k+1):(2*k)]) <- f
+  y <- matrix.to.list(y)
+
+  y.i <- cache$states
+  if ( base.zero ) # used by bisse and geosse
+    y.i <- y.i + 1L
+  y.i[is.na(y.i)] <- k + 1
+
+  ## TODO: I may have to drop support for this, or move it elsewhere.
+  if ( !is.null(multistate <- attr(cache$states, "multistate")) ) {
+    y.multi <- unique(multistate$states)
+    y.i.multi <- match(multistate$states, y.multi)
+
+    y <- c(y, lapply(y.multi, function(x) c(1-f, x)))
+    y.i[multistate$i] <- y.i.multi + k + 1
+  }
+
+  dt.tips.grouped(y, y.i, cache)
+}

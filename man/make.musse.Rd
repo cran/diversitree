@@ -28,7 +28,8 @@ starting.point.musse(tree, k, q.div=5, yule=FALSE)
 }
 
 \arguments{
-  \item{tree}{A phylogenetic tree, in \code{ape} \dQuote{phylo} format.}
+  \item{tree}{An ultrametric bifurcating phylogenetic tree, in
+    \code{ape} \dQuote{phylo} format.}
 
   \item{states}{A vector of character states, each of which must be an
     integer between 1 and \code{k}.  This vector must have names that
@@ -99,7 +100,7 @@ argnames(lik.m) # MuSSE: 1/2
 
 ## You can get the expected argument order for any number of states
 ## this way (sorry - clunky).  The help file also lists the order.
-diversitree:::argnames.musse(NULL, 3)
+diversitree:::default.argnames.musse(3)
 
 ## Here are the parameters:
 pars <- c(.1,  .15,  .2,  # lambda 1, 2, 3
