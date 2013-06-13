@@ -1,6 +1,7 @@
 \name{make.mkn}
 \alias{make.mkn}
 \alias{make.mk2}
+\alias{make.mkn.meristic}
 
 \title{Mk2 and Mk-n Models of character evolution}
 
@@ -18,6 +19,7 @@
 \usage{
 make.mk2(tree, states, strict=TRUE, control=list())
 make.mkn(tree, states, k, strict=TRUE, control=list())
+make.mkn.meristic(tree, states, k, control=list())
 }
 
 \arguments{
@@ -112,8 +114,7 @@ make.mkn(tree, states, k, strict=TRUE, control=list())
     \item \code{method="ode"}: Uses an ODE-based approach to compute
     only the \eqn{k} variables over time, rather than the \eqn{k^2}
     transition probabilities in the \code{exp} approach.  This will be
-    much more efficient when \code{k} is large.  The \code{CVODES}
-    backend is also available here.
+    much more efficient when \code{k} is large.
   }
 }
 

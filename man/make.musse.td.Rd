@@ -12,8 +12,9 @@
 \usage{
 make.musse.td(tree, states, k, n.epoch, sampling.f=NULL,
               strict=TRUE, control=list())
+
 make.musse.t(tree, states, k, functions, sampling.f=NULL,
-              strict=TRUE, control=list())
+             strict=TRUE, control=list(), truncate=FALSE, spline.data=NULL)
 }
 
 \arguments{
@@ -50,6 +51,14 @@ make.musse.t(tree, states, k, functions, sampling.f=NULL,
 
   \item{control}{List of control parameters for the ODE solver.  See
     details in \code{\link{make.bisse}}.}
+
+  \item{truncate}{Logical, indicating if functions should be truncated
+    to zero when negative (rather than causing an error).  May be
+    scalar (applying to all functions) or a vector (of same length as
+    the functions vector).}
+
+  \item{spline.data}{List of data for spline-based time functions.  See
+    details}.
 }
 
 \details{
