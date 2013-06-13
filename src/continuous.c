@@ -12,7 +12,7 @@ SEXP r_make_dt_obj_cont(SEXP cache, SEXP r_ic, SEXP r_br) {
     neq = INTEGER(getListElement(info, "ny"))[0], 
     np  = INTEGER(getListElement(info, "np"))[0];
   /* Initial conditions and branches functions */
-  DtIcFun ic = (DtIcFun) R_ExternalPtrAddr(r_ic);  
+  DtIcFun ic = (DtIcFun) R_ExternalPtrAddr(r_ic);
   DtBrFun br = (DtBrFun) R_ExternalPtrAddr(r_br);
 
   /* Return object */
@@ -88,7 +88,7 @@ void dt_cont_setup_tips(dt_obj_cont *obj, SEXP cache) {
     idx = tip_target[i];
     memcpy(obj->init   + neq * idx,
 	   REAL(tip_y) + neq * i,
-	   neq * sizeof(int));
+	   neq * sizeof(double));
   }
 }
 
@@ -229,7 +229,7 @@ double branches_bm(double *vars_in, double len, double *pars,
 double branches_ou(double *vars_in, double len, double *pars, 
 		   double t0, int idx, double *vars_out) {
   const double m = vars_in[0], v = vars_in[1], z = vars_in[2],
-    s2 = pars[0], alpha = pars[1], theta = pars[3];
+    s2 = pars[0], alpha = pars[1], theta = pars[2];
 
   if ( alpha > 0 ) {
     vars_out[0] = exp(len * alpha) * (m - theta) + theta;

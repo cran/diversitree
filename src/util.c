@@ -1,6 +1,8 @@
 #include <R.h>
 #include <Rinternals.h>
 #include <R_ext/BLAS.h>
+#include <gsl/gsl_errno.h>
+#include "util.h"
 
 /* Simplified matrix multiplication, assuming straightforward sizes
    and zeroing the input.  GEMM does:
@@ -10,8 +12,8 @@
      beta = 0, this gives a fresh calculation of X Y, and with 
      beta = 1, this updates Z to give Z = Z + X Y
 */
-void do_gemm(double *x, int nrx, int ncx,
-             double *y, int nry, int ncy,
+void do_gemm(const double *x, int nrx, int ncx,
+             const double *y, int nry, int ncy,
              double *z) {
   const char *trans = "N";
   double alpha = 1.0, beta = 0.0;
@@ -19,8 +21,8 @@ void do_gemm(double *x, int nrx, int ncx,
                   x, &nrx, y, &nry, &beta, z, &nrx);
 }
 
-void do_gemm2(double *x, int nrx, int ncx,
-	      double *y, int nry, int ncy,
+void do_gemm2(const double *x, int nrx, int ncx,
+	      const double *y, int nry, int ncy,
 	      double *z) {
   const char *trans = "N";
   double alpha = 1.0, beta = 1.0;
@@ -106,6 +108,19 @@ SEXP getListElement(SEXP list, const char *str) {
 
   return elmt;
 } 
+
+SEXP getListElementIfThere(SEXP list, const char *str) {
+  SEXP elmt = R_NilValue, names = getAttrib(list, R_NamesSymbol);
+  int i; 
+  for ( i = 0; i < length(list); i++ )
+    if ( strcmp(CHAR(STRING_ELT(names, i)), str) == 0 ) { 
+      elmt = VECTOR_ELT(list, i); 
+      break; 
+    }
+
+  return elmt;
+} 
+
 /* Tree utilities */
 int descendants(int node, int *edge, int nedge, int ntip, int *desc);
 void descendants_flag(int node, int *edge, int nedge, int ntip, 
@@ -190,3 +205,37 @@ SEXP r_descendants_idx(SEXP node, SEXP edge, SEXP ntip) {
   return ret;
 }
 
+SEXP check_ptr_not_null(SEXP extPtr) {
+  if ( TYPEOF(extPtr) != EXTPTRSXP )
+    error("Recieved non-pointer");
+  if ( R_ExternalPtrAddr(extPtr) == NULL )
+    error("Recieved NULL pointer");
+  return ScalarLogical(1);
+}
+
+void handler_pass_to_R(const char *reason,
+                       const char *file,
+                       int line,
+                       int gsl_errno) {
+  Rf_error("GSLERROR: %s: %s:%d [%d]", reason, file, line, gsl_errno);
+}
+
+/* Pass GSL errors back to R -- don't just quit */
+SEXP set_sane_gsl_error_handling() {
+  gsl_set_error_handler(&handler_pass_to_R);
+  return R_NilValue;
+}
+
+/*
+   This generates a warning that we may live with according to BDR:
+   https://stat.ethz.ch/pipermail/r-devel/2004-September/030792.html
+
+   Update: 2013/06/13: Ignoring this warning is perhaps permissible
+   currently in C (though who knows for how long), but not in C++
+   (though this distinction is not made in the forum posting).  So
+   until I work around this in a more sane way, this utility is an
+   attempt to keep the package meeting requirements.
+*/
+deriv_func* get_deriv_func_from_ptr(SEXP extPtr) {
+  return (deriv_func *) R_ExternalPtrAddr(extPtr);
+}

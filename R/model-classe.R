@@ -57,6 +57,8 @@ make.info.classe <- function(k, phy) {
        k=as.integer(k),
        idx.e=as.integer(1:k),
        idx.d=as.integer((k+1):(2*k)),
+       ## R version of derivatives function
+       derivs=derivs.classe,
        ## Phylogeny:
        phy=phy,
        ## Inference:
@@ -148,7 +150,10 @@ rootfunc.classe <- function(res, pars, condition.surv, root, root.p,
     d.root <- d.root / sum(root.p * lambda * (1 - e.root)^2)
   }
 
-  loglik <- log(sum(root.p * d.root)) + sum(lq)
+  if ( root == ROOT.ALL )
+    loglik <- log(d.root) + sum(lq)
+  else
+    loglik <- log(sum(root.p * d.root)) + sum(lq)
 
   if ( intermediates ) {
     res$root.p <- root.p
@@ -327,3 +332,8 @@ inflate.pars.classe <- function(pars, k) {
 
 check.pars.classe <- function(pars, k)
   check.pars.nonnegative(pars, (k+3)*k*k/2)
+
+derivs.classe <- function(t, y, pars) {
+  ## TODO: Need to write this (Emma: Do you have a copy somewhere?)
+  stop("Not yet possible")
+}
