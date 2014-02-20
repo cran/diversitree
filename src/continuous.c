@@ -226,14 +226,17 @@ double branches_bm(double *vars_in, double len, double *pars,
   return vars_in[2];
 }
 
-double branches_ou(double *vars_in, double len, double *pars, 
-		   double t0, int idx, double *vars_out) {
+/* Note use of expm1 here; saves numerical disaster when alpha is very
+   very small (e.g. 1e-20); this is needed so that we converge
+   gracefully on the alpha=0 case. */
+double branches_ou_opt(double *vars_in, double len, double *pars, 
+		       double t0, int idx, double *vars_out) {
   const double m = vars_in[0], v = vars_in[1], z = vars_in[2],
     s2 = pars[0], alpha = pars[1], theta = pars[2];
 
-  if ( alpha > 0 ) {
+  if (alpha > 0) {
     vars_out[0] = exp(len * alpha) * (m - theta) + theta;
-    vars_out[1] = (exp(2*len*alpha) - 1) * s2 / (2*alpha) +
+    vars_out[1] = expm1(2*len*alpha) * s2 / (2*alpha) +
       exp(2*len*alpha) * v;
   } else {
     vars_out[0] = m;
@@ -242,6 +245,56 @@ double branches_ou(double *vars_in, double len, double *pars,
   vars_out[2] = 0.0;
 
   return len * alpha + z;
+}
+
+double branches_ou_noopt(double *vars_in, double len, double *pars, 
+		   double t0, int idx, double *vars_out) {
+  const double m = vars_in[0], v = vars_in[1], z = vars_in[2],
+    s2 = pars[0], alpha = pars[1];
+
+  if (alpha > 0) {
+    vars_out[0] = m;
+    vars_out[1] = v - s2 *
+      exp(-2 * alpha * t0) * expm1(-2 * alpha * len) / (2 * alpha);
+  } else {
+    vars_out[0] = m;
+    vars_out[1] = v + len * s2;
+  }
+  vars_out[2] = 0.0;
+
+  return z;
+}
+
+double branches_eb(double *vars_in, double len, double *pars,
+		  double t0, int idx, double *vars_out) {
+  const double m = vars_in[0], v = vars_in[1], z = vars_in[2],
+    sigma2 = pars[0], a = pars[1], tr = pars[2];
+  double s0, s1;
+  if (a != 0) {
+    s1 = tr - t0;
+    s0 = s1 - len;
+    len = (exp(a * s1) - exp(a * s0))/a;
+  }
+  vars_out[0] = m;
+  vars_out[1] = v + sigma2 * len;
+  vars_out[2] = 0.0;
+  return z;
+}
+
+double branches_lambda(double *vars_in, double len, double *pars,
+		       double t0, int idx, double *vars_out) {
+  const double m = vars_in[0], v = vars_in[1], z = vars_in[2];
+  const double sigma2 = pars[0], lambda = pars[1], tr = pars[2];
+  const int n_tip = (int)pars[3];
+  double len_scaled = len * lambda;
+  if (idx <= n_tip)
+    len_scaled += (1 - lambda) * (tr - t0);
+
+  vars_out[0] = m;
+  vars_out[1] = v + sigma2 * len_scaled;
+  vars_out[2] = 0.0;
+
+  return z;
 }
 
 /* Shared between bm and ou */
@@ -261,3 +314,26 @@ void initial_conditions_bm(int neq, double *vars_l, double *vars_r,
     log(2 * M_PI * vv) / 2;
 }
 
+/* PGLS: tip_y is cache$y$y, but in tip order because of the
+   reordering done by this point already).  Also, this code duplicates
+   code from dt_cont_setup_tips.
+
+   TODO: Wrap this up nicely (look in model-pgls.R for use).
+ */
+SEXP r_dt_cont_reset_tips(SEXP extPtr, SEXP tip_y) {
+  dt_obj_cont *obj = (dt_obj_cont*)R_ExternalPtrAddr(extPtr);
+  double *y = REAL(tip_y);
+  int i, idx, neq = obj->neq, n_tip = obj->n_tip;
+  if (LENGTH(tip_y) != neq * n_tip)
+    error("Wrong length tip_y - expected %d, got %d",
+	  neq * n_tip, LENGTH(tip_y));
+
+  for (i = 0; i < n_tip; i++) {
+    idx = obj->tip_target[i];
+    memcpy(obj->init   + neq * idx,
+	   y           + neq * i,
+	   neq * sizeof(double));
+  }
+
+  return R_NilValue;
+}

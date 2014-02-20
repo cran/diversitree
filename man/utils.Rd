@@ -2,6 +2,8 @@
 \alias{get.descendants}
 \alias{run.cached}
 \alias{expand.parameters}
+\alias{drop.likelihood}
+\alias{get.likelihood}
 \title{Utility Functions}
 \description{
   These are utility functions that are used internally by diversitree,
@@ -17,6 +19,8 @@
 get.descendants(node, tree, tips.only=FALSE, edge.index=FALSE)
 run.cached(filename, expr, regenerate=FALSE)
 expand.parameters(p, lik.new, repl=0, target=argnames(lik.new))
+get.likelihood(object)
+drop.likelihood(object)
 }
 
 \arguments{
@@ -37,6 +41,10 @@ expand.parameters(p, lik.new, repl=0, target=argnames(lik.new))
 
   \item{regenerate}{Logical: force re-evaluation of expr and
     regeneration of filename?}
+
+  \item{object}{For \code{drop.likelihood}, an object that has a
+    \code{likelihood} attribute to be removed (saves space on object
+    save); for \code{get.likelihood}, retrieves the function.}
 
   \item{p, lik.new, repl, target}{Undocumented currently}
 }
