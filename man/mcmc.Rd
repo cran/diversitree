@@ -15,7 +15,7 @@ mcmc(lik, x.init, nsteps, ...)
              sampler=sampler.slice, fail.value=-Inf, lower=-Inf,
              upper=Inf, print.every=1, control=list(),
              save.file, save.every=0, save.every.dt=NULL,
-             previous=NULL, previous.tol=1e-4, ...)
+             previous=NULL, previous.tol=1e-4, keep.func=TRUE, ...)
 
 sampler.slice(lik, x.init, y.init, w, lower, upper, control)
 sampler.norm(lik, x.init, y.init, w, lower, upper, control)
@@ -85,6 +85,10 @@ sampler.norm(lik, x.init, y.init, w, lower, upper, control)
     posterior probability in the \code{previous} samples.  If the
     difference is greater than \code{previous.tol} then \code{mcmc} will
     not continue.}
+
+  \item{keep.func}{Indicates if the returned samples should include the
+    likelihood function, which can be accessed with
+    \code{\link{get.likelihood}}.}
   
   \item{...}{Arguments passed to the function \code{lik}}
 
@@ -211,14 +215,14 @@ lik(pars)
 
 ## This produces about a sample a second, so takes a while.  The "upper"
 ## limit is a hard upper limit, above which the sampler will never let
-## the parameter going (in effect, putting a uniform prior on the range
+## the parameter go (in effect, putting a uniform prior on the range
 ## lower..upper, and returning the joint distribution conditional on the
 ## parameters being in this range).
 tmp <- mcmc(lik, pars, nsteps=100, w=.1)
 
 ## The argument 'w' works best when it is about the width of the "high
 ## probability" region for that parameter.  This takes the with of the
-## 90% quantile range.  The resulting widths are only slightly faster
+## 90\% quantile range.  The resulting widths are only slightly faster
 ## than the first guess.  Samples are generated about 1/s; allow 15
 ## minutes to generate 1000 samples.
 w <- diff(sapply(tmp[2:7], quantile, c(.05, .95)))

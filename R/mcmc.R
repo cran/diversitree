@@ -24,6 +24,7 @@ mcmc.default <- function(lik, x.init, nsteps, w, prior=NULL,
                          control=list(),
                          save.file, save.every=0, save.every.dt=NULL,
                          previous=NULL, previous.tol=1e-4,
+                         keep.func=TRUE,
                          ...) {
   if ( is.null(sampler) )
     sampler <- sampler.slice
@@ -35,7 +36,7 @@ mcmc.default <- function(lik, x.init, nsteps, w, prior=NULL,
     save.type <- match.arg(tolower(save.type), c("csv", "rds"))
     save.fun <- switch(save.type,
                        rds=saveRDS,
-                       csv=function(x) write.csv(x, row.names=FALSE))
+                       csv=function(x, f) write.csv(x, f, row.names=FALSE))
     save.file.bak <- paste(save.file, ".bak", sep="")
   }
 
@@ -94,9 +95,12 @@ mcmc.default <- function(lik, x.init, nsteps, w, prior=NULL,
     stop(msg)
   }
 
+  class.str <- c(sprintf("mcmcsamples.%s", get.info(lik)$name),
+                 "mcmcsamples", "data.frame")
+
   clean.hist <- function(pars, p) {
     out <- data.frame(i=seq_along(p), pars, p)
-    class(out) <- c("mcmcsamples", "data.frame")
+    class(out) <- class.str
     out
   }
 
@@ -120,7 +124,7 @@ mcmc.default <- function(lik, x.init, nsteps, w, prior=NULL,
         ## fails while saving.
         if ( file.exists(save.file) )
           ok <- file.rename(save.file, save.file.bak)
-        ok <- try(save.fun(clean.hist(hist.pars[j,], hist.prob[j]),
+        ok <- try(save.fun(clean.hist(hist.pars[j,,drop=FALSE], hist.prob[j]),
                            save.file))
         if ( inherits(ok, "try-error") )
           warning("Error while writing progress file (continuing)",
@@ -146,6 +150,11 @@ mcmc.default <- function(lik, x.init, nsteps, w, prior=NULL,
   if ( save.every > 0 || !is.null(save.every.dt) )
     if ( nrow(samples) == nsteps && file.exists(save.file.bak) )
       file.remove(save.file.bak)
+
+  if (keep.func) {
+    attr(samples, "func")  <- set.defaults(lik, defaults=list(...))
+    attr(samples, "prior") <- prior
+  }
 
   samples
 }
@@ -214,21 +223,32 @@ make.prior.uniform <- function(lower, upper, log=TRUE) {
   }
 }
 
-coef.mcmcsamples <- function(object, thin=1, full=FALSE, lik=NULL,
-                             ...) {
-  p <- as.matrix(object[-c(1, ncol(object))])
-  if ( thin > 1 )
-    p <- p[seq(1, nrow(p), by=thin),,drop=FALSE]
-  if ( full ) {
-    if ( is.null(lik) )
-      stop("'lik' must be provided if full=TRUE")
-    else if ( inherits(lik, "constrained") ) {
-      if ( ncol(p) != length(argnames(object)) )
-        stop("Dimensions of parameters are not correct for this function")
-      p <- t(apply(p, 1, object, pars.only=TRUE))
-    }
+mcmcsamples.index <- function(n, burnin=NA, thin=NA, sample=NA) {
+  i <- seq_len(n)
+  if (!is.na(burnin) && burnin > 0) {
+    if (burnin < 1)
+      burnin <- floor(burnin * n)
+    i <- i[i > burnin]
   }
-    
+  if (!is.na(thin) && thin > 1)
+    i <- i[seq(1, length(i), by=thin)]
+  if (!is.na(sample)) {
+    if (sample > length(i))
+      warning("Sampling *will* generate duplicates")
+    i <- i[sample(length(i), sample, replace=TRUE)]
+  }
+  i
+}
+
+coef.mcmcsamples <- function(object, burnin=NA, thin=NA, sample=NA,
+                             full=FALSE, ...) {
+  i <- mcmcsamples.index(nrow(object), burnin, thin, sample)
+  p <- as.matrix(object[i,-c(1, ncol(object)),drop=FALSE])
+  if (full) {
+    lik <- get.likelihood(object)
+    if (inherits(lik, "constrained"))
+      p <- t(apply(p, 1, lik, pars.only=TRUE))
+  }
   p
 }
 

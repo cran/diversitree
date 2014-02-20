@@ -1,9 +1,12 @@
 ## NAMESPACE
 
-## Import Rcpp so that .onLoad can load the modules.
-import(Rcpp)
-
 useDynLib(diversitree)
+
+import(methods)
+import(Rcpp)
+import(ape)
+import(deSolve)
+import(subplex)
 
 ## 1. make
 export(make.bd)
@@ -17,9 +20,12 @@ export(make.bisse.uneven)
 export(make.bisseness)
 export(make.bm)
 export(make.classe)
+export(make.eb)
 export(make.geosse)
 export(make.geosse.split)
+export(make.geosse.t)
 export(make.geosse.uneven)
+export(make.lambda)
 export(make.mk2)
 export(make.mkn)
 export(make.mkn.multitrait)
@@ -30,6 +36,7 @@ export(make.musse.split)
 export(make.musse.t)
 export(make.musse.td)
 export(make.ou)
+export(make.pgls)
 export(make.quasse)
 export(make.quasse.split)
 export(make.yule)
@@ -102,6 +109,7 @@ export(tree.quasse)
 export(tree.yule)
 
 export(sim.character)
+export(make.sim.character)
 
 ## Utility functions:
 export(protect)
@@ -120,6 +128,8 @@ export(prune)
 export(get.descendants)
 
 export(run.cached)
+export(drop.likelihood)
+export(get.likelihood)
 
 ## Support for QuaSSE models.
 export(constant.x)
@@ -163,6 +173,13 @@ S3method(make.asr.marginal, bisse)
 S3method(make.asr.marginal, musse)
 S3method(make.asr.marginal, bisse.t)
 S3method(make.asr.marginal, musse.t)
+
+S3method(residuals, pgls.dt)
+S3method(fitted,    pgls.dt)
+S3method(residuals, fit.mle.pgls)
+S3method(fitted,    fit.mle.pgls)
+S3method(residuals, mcmcsamples.pgls)
+S3method(fitted,    mcmcsamples.pgls)
 
 ## TODO: This means that the time-dependent ones won't dispatch?
 

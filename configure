@@ -3270,8 +3270,8 @@ else
    as_fn_error $? "gsl-config not found, is GSL installed?" "$LINENO" 5
 fi
 
-{ $as_echo "$as_me:${as_lineno-$LINENO}: checking if GSL version >= 1.12" >&5
-$as_echo_n "checking if GSL version >= 1.12... " >&6; }
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking if GSL version >= 1.15" >&5
+$as_echo_n "checking if GSL version >= 1.15... " >&6; }
 if test "$cross_compiling" = yes; then :
   gsl_version_ok=yes
 else
@@ -3304,7 +3304,7 @@ rm -f core *.core core.conftest.* gmon.out bb.out conftest$ac_exeext \
 fi
 
 if test "${gsl_version_ok}" = no; then
-  as_fn_error $? "Need GSL version >= 1.12" "$LINENO" 5
+  as_fn_error $? "Need GSL version >= 1.15" "$LINENO" 5
 else
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
 $as_echo "yes" >&6; }
