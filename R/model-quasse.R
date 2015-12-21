@@ -273,15 +273,15 @@ check.pars.quasse <- function(lambda.x, mu.x, drift, diffusion) {
 ##   cache <- get.cache(object)
 
 ##   if ( inherits(p, "fit.mle") )
-##     p <- coef(p, full=TRUE)
+##     p <- stats::coef(p, full=TRUE)
 ##   else if ( inherits(p, "mcmcsamples") )
-##     p <- coef(p, lik=object, full=TRUE, thin=thin)
+##     p <- stats::coef(p, lik=object, full=TRUE, thin=thin)
 ##   ## The other case to deal with here would be constrained functions
 ##   ## where parameters still need expanding...
   
 ##   if ( missing(x) ) {
 ##     r <- range(cache$states, na.rm=TRUE)
-##     x <- seq(r[1], r[2], length=nx)
+##     x <- seq(r[1], r[2], length.out=nx)
 ##   }
 ##   if ( is.null(v) )
 ##     v <- c("lambda", "mu")

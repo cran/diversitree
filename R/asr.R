@@ -62,7 +62,7 @@ do.asr.marginal.R <- function(pars, cache, res, nodes, states.idx,
   len <- cache$len
   depth <- cache$depth
   root.idx <- cache$root
-  anc <- cache$anc
+  anc <- cache$ancestors
 
   if ( is.null(nodes) )
     nodes <- root.idx:max(cache$order)
@@ -107,11 +107,15 @@ do.asr.marginal.R <- function(pars, cache, res, nodes, states.idx,
 
 make.do.asr.marginal <- function(all.branches, rootfunc) {
   eb <- environment(all.branches)
-
   cache <- eb$cache
   states.idx <- cache$info$idx.d
-  branches <- eb$branches
-  initial.conditions <- eb$initial.conditions
+  if (isTRUE(cache$info$partitioned)) {
+    branches <- eb$branches.split
+    initial.conditions <- eb$initial.conditions.split
+  } else {
+    branches <- eb$branches
+    initial.conditions <- eb$initial.conditions
+  }
   function(pars, nodes, preset, ...) {
     root.f <- function(res, pars)
       rootfunc(res, pars, ...)

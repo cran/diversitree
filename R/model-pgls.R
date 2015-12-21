@@ -170,7 +170,7 @@ make.all.branches.pgls.contrasts <- function(cache, control) {
 
 check.data.pgls <- function(tree, formula, data, allow.unnamed=FALSE) {
   if (!inherits(formula, "formula"))
-    stop("'formula' must be a formua object")
+    stop("'formula' must be a formula object")
   if (!is.data.frame(data))
     stop("'data' must be a data.frame")
 
@@ -244,7 +244,7 @@ pgls.root.var.bm <- function(tree) {
   x <- rep(1, n.spp)
   tmp <- pic(x, tree, var.contrasts=TRUE, rescaled.tree=TRUE)
   idx <- tmp$rescaled.tree$edge[,1] == n.spp + 1
-  root.v <- tmp$rescaled.tree$edge.len[idx]
+  root.v <- tmp$rescaled.tree$edge.length[idx]
   prod(root.v)/sum(root.v)
 }
 
@@ -270,11 +270,11 @@ fitted.pgls.dt <- function(object, p, ...) {
 }
 
 fitted.fit.mle.pgls <- function(object, ...) {
-  fitted(get.likelihood(object), coef(object, ...))
+  fitted(get.likelihood(object), stats::coef(object, ...))
 }
 
 fitted.mcmcsamples.pgls <- function(object, ...) {
-  p <- coef(object, ...)
+  p <- stats::coef(object, ...)
   lik <- get.likelihood(object)
   ret <- apply(p, 1, function(x) fitted(lik, x))
   rownames(ret) <- rownames(get.cache(lik)$predictors)

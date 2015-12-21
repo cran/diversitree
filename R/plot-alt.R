@@ -141,7 +141,7 @@ plot2.phylo <- function(x, type="phylogram", use.edge.length=TRUE,
 ## This is derived from ape's nodeDepth
 pp.node.coords <- function(phy) {
   phy.p <- reorder(phy, "pruningwise")
-  if ( is.null(phy.p$edge.len) )
+  if ( is.null(phy.p$edge.length) )
     xx <- node.depth(phy.p)
   else
     xx <- node.depth.edgelength(phy.p)
@@ -195,8 +195,8 @@ pp.coords.fan <- function(phy, xy) {
 
 pp.coords.fix.xy <- function(phy, xy) {
   n <- length(phy$tip.label) + sum(phy$n.taxa - 1)  
-  xy$theta <- xy$y / (n + 1) * 2 * pi
-  xy$r <- xy$x
+  xy$theta <- xy$yy / (n + 1) * 2 * pi
+  xy$r <- xy$xx
 
   xy$xx <- with(xy, r * cos(theta))
   xy$yy <- with(xy, r * sin(theta))
@@ -288,7 +288,7 @@ pp.clades.phylogram <- function(phy, xy, xy.seg, border, fill, lwd) {
   y0 <- ym - dy
   y1 <- ym + dy
 
-  polygon(rbind(x0, x1, x1, x0, NA), 
+  graphics::polygon(rbind(x0, x1, x1, x0, NA), 
           rbind(ym, y0, y1, ym, NA),
           border=border[i], col=fill[i], lwd=lwd[i])
 }
