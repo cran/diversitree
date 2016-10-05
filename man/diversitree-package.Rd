@@ -17,7 +17,7 @@ Maintainer: \packageMaintainer{diversitree}
   Diversitree contains methods described in the following papers (all of
   which aside from Maddison et al. 2007 were originally published as a
   diversitree implementation).
-  
+
   \itemize{
     \item{FitzJohn R.G., Maddison W.P., and Otto S.P. 2009. Estimating
       trait-dependent speciation and extinction rates from incompletely
