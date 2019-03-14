@@ -180,6 +180,11 @@ starting.point.bisse(tree, q.div=5, yule=FALSE)
 }
 
 \examples{
+## Due to a change in sample() behaviour in newer R it is necessary to
+## use an older algorithm to replicate the previous examples
+if (getRversion() >= "3.6.0") {
+  RNGkind(sample.kind = "Rounding")
+}
 pars <- c(0.1, 0.2, 0.03, 0.03, 0.01, 0.01)
 set.seed(4)
 phy <- tree.bisse(pars, max.t=30, x0=0)
@@ -278,9 +283,9 @@ lik.bisse2.bd(pars)   - lik.bd2(pars)
 lik.bisse2.bd(2*pars) - lik.bd2(2*pars)
 
 ## 4. Unresolved clade BiSSE / Birth-Death
-set.seed(1)
-unresolved <- data.frame(tip.label=I(sample(phy$tip.label, 5)),
-                         Nc=sample(2:10, 5), n0=0, n1=0)
+unresolved <- data.frame(tip.label=I(c("sp25", "sp30", "sp40", "sp56", "sp20")),
+                         Nc =c(10, 9, 6, 5, 2),
+                         n0=0, n1=0)
 unresolved.bd <- structure(unresolved$Nc, names=unresolved$tip.label)
 lik.bisse3 <- make.bisse(phy, phy$tip.state, unresolved)
 lik.bisse3.bd <- constrain(lik.bisse3,
