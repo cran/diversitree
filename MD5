@@ -1,5 +1,5 @@
 bb66122b308c598d80afe005d942ced5 *ChangeLog
-55780468e18bb51495823b5528a17ea0 *DESCRIPTION
+2755bdc57a45cf6343709b0a246d99db *DESCRIPTION
 4c7c3bd4579a0cf81fe5f102dc4ba5e8 *NAMESPACE
 dbc500fc781a33f15260b55cf7b9b321 *R/asr-bisse.R
 ea5d999800aa86114db676f0bb40bdee *R/asr-geosse.R
@@ -94,7 +94,7 @@ d28a7c41c3eb8ef2a4bd44b6770e5627 *R/td.R
 29f8bbedaf700d70b50813ce69f27576 *R/zzz.R
 df9e0a0f78ba1d171b49f276b3e1d508 *README.md
 3fcd2a28d2be5d6e9787773eb4380f81 *TODO
-3312c6882951737ceaae849a16c1642f *build/partial.rdb
+cbb581b360d8894a7afdfbf3813f8a45 *build/partial.rdb
 c257f9b8c04649ccd22abae0ddbeea40 *cleanup
 606522bb8b25abd7c25c4afedff2a219 *configure
 8e6a48ceb2d8f41392e09d8fed30fe22 *configure.ac
