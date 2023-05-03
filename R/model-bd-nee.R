@@ -4,7 +4,8 @@ make.cache.bd.nee <- function(tree=NULL, sampling.f=NULL,
   if ( !is.null(sampling.f) && !is.null(unresolved) )
     stop("Cannot specify both sampling.f and unresolved")
   sampling.f <- check.sampling.f(sampling.f, 1)
-  unresolved <- check.unresolved.bd(tree, unresolved)
+  if ( !is.null(tree) && !is.null(unresolved) )
+    unresolved <- check.unresolved.bd(tree, unresolved)
 
   if ( is.null(times) ) { # proper tree
     tree <- check.tree(tree)
@@ -24,7 +25,7 @@ make.cache.bd.nee <- function(tree=NULL, sampling.f=NULL,
        const=const)
 }
 
-make.all.branches.bd.nee <- function(cache, control) {
+make.all_branches.bd.nee <- function(cache, control) {
   N <- cache$N
   x <- cache$x
   f <- cache$f
