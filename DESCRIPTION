@@ -1,5 +1,5 @@
 Package: diversitree
-Version: 0.9-19
+Version: 0.9-20
 Title: Comparative 'Phylogenetic' Analyses of Diversification
 Authors@R: c(person("Richard G.", "FitzJohn", role = c("aut", "cre"),
     email = "rich.fitzjohn@gmail.com"),
@@ -24,11 +24,11 @@ Description: Contains a number of comparative 'phylogenetic' methods,
 License: GPL (>= 2)
 URL: https://www.zoology.ubc.ca/prog/diversitree/
 NeedsCompilation: yes
-Packaged: 2023-08-17 14:22:53 UTC; rfitzjoh
+Packaged: 2023-09-05 08:37:24 UTC; rfitzjoh
 Author: Richard G. FitzJohn [aut, cre],
   Emma Goldberg [aut],
   Karen Magnuson-Ford [aut],
   Roger Sidje [aut]
 Maintainer: Richard G. FitzJohn <rich.fitzjohn@gmail.com>
 Repository: CRAN
-Date/Publication: 2023-08-17 16:12:33 UTC
+Date/Publication: 2023-09-06 09:10:29 UTC

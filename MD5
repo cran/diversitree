@@ -1,5 +1,5 @@
 bb66122b308c598d80afe005d942ced5 *ChangeLog
-c04376320e69286e1f85b29221962a36 *DESCRIPTION
+45846d686ecddaaf69c06d3b11d7dddb *DESCRIPTION
 c66ba5983853457e6655bca524ab4ce7 *NAMESPACE
 e86aeb76e23f046bd1edee6e63cc0c3d *R/asr-bisse.R
 423e0886e8a1d2fc3cdcace7c0ab18ca *R/asr-geosse.R
@@ -94,7 +94,7 @@ ff408bfc9d9ef45e57f242f3f2f5c464 *R/td.R
 29f8bbedaf700d70b50813ce69f27576 *R/zzz.R
 1852b0bd2f89296227c7a08018921129 *README.md
 3fcd2a28d2be5d6e9787773eb4380f81 *TODO
-f46da2c1e157bca9c5ce95a7fc2dc113 *build/partial.rdb
+f3da9c9471ca8a4a4b2af5c966bf3e2d *build/partial.rdb
 c257f9b8c04649ccd22abae0ddbeea40 *cleanup
 f77a8dd1801b4b06f1cddf16e9ee380e *configure
 5a400edc6fe97dd43547feac33eb7456 *configure.ac
@@ -228,8 +228,8 @@ bd3936f477d5bd643f2d474cdbc78814 *src/hdr.c
 9e8a5297bc05631b2b4545f9d6c1818a *src/hyperg.f
 d022d6c06cfe19fea54ebed46fcec2cc *src/interface.cpp
 c8ad7c0a3f3e97403da91d4b9f15b14a *src/mkn-eqs.c
-0d2a2905308ee4b5dd595ea8f3804f55 *src/mkn-expokit.c
-b2319caac35b78158ef48618fee3e733 *src/mkn-expokit.h
+6433da646d806cbb8af211e588d9a4d3 *src/mkn-expokit.c
+9bc8bbec37f023bc57201dcf9ea504ea *src/mkn-expokit.h
 b6315f8343f3da0ae9bf3d6743d02fd8 *src/mkn-meristic-eqs.c
 3ec594950b95949d32f825c64661eadf *src/mkn-pij.c
 9bea58817acffee5322e5162e920545b *src/mkn-pij.h
